@@ -75,7 +75,8 @@ public class RotationTask extends BukkitRunnable {
                     if (timeSinceLastPlayer > manager.getAutoMobTargetDelay() * 1000) {
                         manager.setMobTargetMode(true);
                         if (manager.getCameraman() != null) {
-                            manager.getCameraman().sendMessage("Auto-switched to Mob Target Mode due to inactivity.");
+                            manager.sendInfoMessage(manager.getCameraman(),
+                                    "Auto-switched to Mob Target Mode due to inactivity.");
                         }
                     }
                 }

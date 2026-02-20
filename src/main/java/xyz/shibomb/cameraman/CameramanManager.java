@@ -247,7 +247,7 @@ public class CameramanManager {
         }
     }
 
-    private void sendInfoMessage(Player player, String message) {
+    public void sendInfoMessage(Player player, String message) {
         if (showMessage && player != null) {
             player.sendMessage(message);
         }
@@ -491,7 +491,7 @@ public class CameramanManager {
         plugin.saveConfig();
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Newcomer mode set to: " + enabled);
+            sendInfoMessage(cameraman, "Newcomer mode set to: " + enabled);
         }
     }
 
@@ -513,7 +513,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Rotation mode set to: " + enabled + " (Interval: " + intervalSeconds + "s)");
+            sendInfoMessage(cameraman, "Rotation mode set to: " + enabled + " (Interval: " + intervalSeconds + "s)");
         }
     }
 
@@ -543,7 +543,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Mob Target Mode set to: " + enabled);
+            sendInfoMessage(cameraman, "Mob Target Mode set to: " + enabled);
         }
     }
 
@@ -562,7 +562,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Auto Mob Target set to: " + enabled + " (Delay: " + delay + "s)");
+            sendInfoMessage(cameraman, "Auto Mob Target set to: " + enabled + " (Delay: " + delay + "s)");
         }
     }
 
@@ -601,7 +601,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Smooth Teleport set to: " + enabled + " (Duration: " + duration + "s)");
+            sendInfoMessage(cameraman, "Smooth Teleport set to: " + enabled + " (Duration: " + duration + "s)");
         }
     }
 
@@ -634,7 +634,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Spectate Mode set to: " + (this.spectateMode == SpectateState.RANDOM ? "RANDOM"
+            sendInfoMessage(cameraman, "Spectate Mode set to: " + (this.spectateMode == SpectateState.RANDOM ? "RANDOM"
                     : (this.spectateMode == SpectateState.ENABLED)));
         }
     }
@@ -646,7 +646,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Spectate Perspective (Player) set to: " + perspective);
+            sendInfoMessage(cameraman, "Spectate Perspective (Player) set to: " + perspective);
         }
     }
 
@@ -663,7 +663,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage(
+            sendInfoMessage(cameraman, 
                     "Spectate Mode (Mob) set to: " + (this.mobSpectateMode == SpectateState.RANDOM ? "RANDOM"
                             : (this.mobSpectateMode == SpectateState.ENABLED)));
         }
@@ -676,7 +676,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Spectate Perspective (Mob) set to: " + perspective);
+            sendInfoMessage(cameraman, "Spectate Perspective (Mob) set to: " + perspective);
         }
     }
 
@@ -704,7 +704,7 @@ public class CameramanManager {
 
         // Ensure Spectator mode
         if (cameraman.getGameMode() != GameMode.SPECTATOR) {
-            cameraman.sendMessage("You must be in Spectator Mode to use Scenic Mode.");
+            sendInfoMessage(cameraman, "You must be in Spectator Mode to use Scenic Mode.");
             return;
         }
 
@@ -805,7 +805,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Mob Night Vision set to: " + enabled);
+            sendInfoMessage(cameraman, "Mob Night Vision set to: " + enabled);
         }
     }
 
@@ -816,7 +816,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Show Message set to: " + enabled);
+            sendInfoMessage(cameraman, "Show Message set to: " + enabled);
         }
     }
 
@@ -827,7 +827,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Night Vision Threshold set to: " + threshold);
+            sendInfoMessage(cameraman, "Night Vision Threshold set to: " + threshold);
         }
     }
 
@@ -838,7 +838,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Spectate Distance set to: " + distance);
+            sendInfoMessage(cameraman, "Spectate Distance set to: " + distance);
         }
     }
 
@@ -849,7 +849,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Spectate Height set to: " + height);
+            sendInfoMessage(cameraman, "Spectate Height set to: " + height);
         }
     }
 
@@ -892,7 +892,7 @@ public class CameramanManager {
         plugin.saveConfig();
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Orbit Speed set to: " + speed);
+            sendInfoMessage(cameraman, "Orbit Speed set to: " + speed);
         }
     }
 
@@ -903,7 +903,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Min Rotation Distance set to: " + distance);
+            sendInfoMessage(cameraman, "Min Rotation Distance set to: " + distance);
         }
     }
 
@@ -917,7 +917,7 @@ public class CameramanManager {
         plugin.saveConfig();
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            cameraman.sendMessage("Orbit Direction set to: " + direction);
+            sendInfoMessage(cameraman, "Orbit Direction set to: " + direction);
         }
     }
 
@@ -930,7 +930,7 @@ public class CameramanManager {
         plugin.getConfig().set("dynamicSmoothness", val);
         plugin.saveConfig();
         if (getCameraman() != null)
-            getCameraman().sendMessage("Dynamic Smoothness: " + val);
+            sendInfoMessage(getCameraman(), "Dynamic Smoothness: " + val);
     }
 
     public void setFlybyDuration(String val) {
@@ -938,7 +938,7 @@ public class CameramanManager {
         plugin.getConfig().set("flybyDuration", val);
         plugin.saveConfig();
         if (getCameraman() != null)
-            getCameraman().sendMessage("Flyby Duration: " + val);
+            sendInfoMessage(getCameraman(), "Flyby Duration: " + val);
     }
 
     public void setCraneDuration(String val) {
@@ -946,7 +946,7 @@ public class CameramanManager {
         plugin.getConfig().set("craneDuration", val);
         plugin.saveConfig();
         if (getCameraman() != null)
-            getCameraman().sendMessage("Crane Duration: " + val);
+            sendInfoMessage(getCameraman(), "Crane Duration: " + val);
     }
 
     public void setRandomPerspectives(String type, List<String> perspectives) {
@@ -964,7 +964,7 @@ public class CameramanManager {
         loadRandomPerspectives(); // Reload
 
         if (getCameraman() != null) {
-            getCameraman().sendMessage(
+            sendInfoMessage(getCameraman(), 
                     "Random perspectives updated for " + type + ": " + perspectives);
         }
     }
@@ -974,7 +974,7 @@ public class CameramanManager {
         plugin.getConfig().set("moveSpeed", speed);
         plugin.saveConfig();
         if (getCameraman() != null) {
-            getCameraman().sendMessage("Move Speed set to: " + speed);
+            sendInfoMessage(getCameraman(), "Move Speed set to: " + speed);
         }
     }
 
@@ -987,7 +987,7 @@ public class CameramanManager {
         plugin.getConfig().set("moveZ", z);
         plugin.saveConfig();
         if (getCameraman() != null) {
-            getCameraman().sendMessage("Move Direction set to: X=" + x + ", Y=" + y + ", Z=" + z);
+            sendInfoMessage(getCameraman(), "Move Direction set to: X=" + x + ", Y=" + y + ", Z=" + z);
         }
     }
 
@@ -1005,7 +1005,7 @@ public class CameramanManager {
             if (perspective != null) {
                 msg += " (Perspective: " + perspective.name() + ")";
             }
-            getCameraman().sendMessage(msg);
+            sendInfoMessage(getCameraman(), msg);
         }
     }
 }
