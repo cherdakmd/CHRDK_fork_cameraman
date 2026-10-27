@@ -1,6 +1,7 @@
 package xyz.shibomb.cameraman;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -9,10 +10,11 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-public class CameramanCommand implements CommandExecutor {
+public class CameramanCommand implements CommandExecutor, TabCompleter {
 
     private final CameramanManager manager;
 
@@ -54,6 +56,82 @@ public class CameramanCommand implements CommandExecutor {
     private static String normalizeSubCommand(String input) {
         String normalized = input.toLowerCase(Locale.ROOT);
         return RUSSIAN_SUBCOMMANDS.getOrDefault(normalized, normalized);
+    }
+
+    @Override
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias,
+            @NotNull String[] args) {
+        if (!command.testPermissionSilent(sender)) {
+            return List.of();
+        }
+
+        if (args.length == 1) {
+            List<String> subcommands = new ArrayList<>(Arrays.asList(
+                    "set", "unset", "target", "clear", "newcomer", "rotation", "minrotationdistance",
+                    "mobtarget", "automob", "teleportsmooth", "spectatemode", "mobspectatemode",
+                    "mobnightvision", "showmessage", "nightvisionthreshold", "distance", "height",
+                    "orbitspeed", "orbitdirection", "smoothness", "flybyduration", "craneduration",
+                    "craneheightmin", "craneheightmax", "random", "scenic", "autoscenic", "movespeed",
+                    "movedirection"));
+            subcommands.addAll(RUSSIAN_SUBCOMMANDS.keySet());
+            return matching(subcommands, args[0]);
+        }
+
+        if (args.length < 2) {
+            return List.of();
+        }
+
+        String subcommand = normalizeSubCommand(args[0]);
+        int argumentIndex = args.length - 1;
+        String current = args[args.length - 1];
+
+        if ((subcommand.equals("set") || subcommand.equals("target")) && argumentIndex == 1) {
+            return matching(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), current);
+        }
+
+        if (argumentIndex == 1) {
+            if (List.of("newcomer", "mobtarget", "automob", "teleportsmooth", "mobnightvision", "showmessage")
+                    .contains(subcommand)) {
+                return matching(List.of("true", "false"), current);
+            }
+            if (subcommand.equals("rotation")) {
+                return matching(List.of("true", "false"), current);
+            }
+            if (subcommand.equals("spectatemode") || subcommand.equals("mobspectatemode")) {
+                return matching(List.of("true", "false", "RANDOM"), current);
+            }
+            if (subcommand.equals("scenic") || subcommand.equals("autoscenic")) {
+                return matching(List.of("true", "false"), current);
+            }
+            if (subcommand.equals("random")) {
+                return matching(List.of("player", "mob", "scenic"), current);
+            }
+            if (subcommand.equals("orbitdirection")) {
+                return matching(List.of("LEFT", "RIGHT", "RANDOM"), current);
+            }
+        }
+
+        if (argumentIndex == 2) {
+            if (subcommand.equals("spectatemode") || subcommand.equals("mobspectatemode")
+                    || subcommand.equals("scenic") || subcommand.equals("autoscenic")) {
+                return matching(Arrays.stream(SpectatePerspective.values()).map(Enum::name).toList(), current);
+            }
+            if (subcommand.equals("random")) {
+                return matching(Arrays.stream(SpectatePerspective.values())
+                        .filter(perspective -> perspective != SpectatePerspective.RANDOM)
+                        .map(Enum::name).toList(), current);
+            }
+        }
+
+        return List.of();
+    }
+
+    private List<String> matching(List<String> candidates, String prefix) {
+        String normalizedPrefix = prefix.toLowerCase(Locale.ROOT);
+        return candidates.stream()
+                .filter(candidate -> candidate.toLowerCase(Locale.ROOT).startsWith(normalizedPrefix))
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
     }
 
     @Override

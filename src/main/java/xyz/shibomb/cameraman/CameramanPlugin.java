@@ -14,7 +14,9 @@ public final class CameramanPlugin extends JavaPlugin {
 
         this.cameramanManager = new CameramanManager(this);
         
-        getCommand("cameraman").setExecutor(new CameramanCommand(this.cameramanManager));
+        CameramanCommand cameramanCommand = new CameramanCommand(this.cameramanManager);
+        getCommand("cameraman").setExecutor(cameramanCommand);
+        getCommand("cameraman").setTabCompleter(cameramanCommand);
         getServer().getPluginManager().registerEvents(new PlayerJoinListener(this.cameramanManager), this);
     }
 
