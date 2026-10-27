@@ -32,7 +32,7 @@ public class PlayerJoinListener implements Listener {
             manager.setMobTargetMode(false);
             Player cameramanPlayer = manager.getCameraman();
             if (cameramanPlayer != null) {
-                cameramanPlayer.sendMessage("Mob Target Mode disabled because a player joined.");
+                cameramanPlayer.sendMessage("Режим выбора мобов отключён: подключился игрок.");
             }
         }
     }

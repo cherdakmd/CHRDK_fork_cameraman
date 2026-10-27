@@ -1,194 +1,79 @@
-![Cameraman Plugin Icon](icon.png)
+![Иконка плагина Cameraman](icon.png)
 
-# Cinematic Cameraman Plugin
+# Cinematic Cameraman — кинематографичная камера
 
-A Minecraft Paper plugin that allows a designated player to act as a "Cinematic Cameraman", automatically spectating players with various modes.
+Плагин для Minecraft Paper, позволяющий назначить игрока оператором камеры и автоматически снимать игроков и мобов в разных ракурсах.
 
-## Live Demo
+## Связь и новости
 
-Check out the plugin in action on our 24/7 YouTube Live stream:
-[**Watch Live on YouTube**](https://l.32keta.com/smp)
+Telegram: [https://t.me/cherdakmd](https://t.me/cherdakmd)
 
-## Features
+## Возможности
 
-- **Cameraman Mode**: Designate a player to be the cameraman. They will be put into Spectator mode.
-- **Newcomer Mode**: Automatically spectate players when they join the server.
-- **Rotation Mode**: Automatically cycle through online players at a configurable interval.
-- **Mob Target Mode**: Spectate nearby mobs (living entities) instead of players.
-- **Auto Mob Target**: Automatically switch to Mob Target Mode when no players are available to spectate.
-- **Auto Scenic Mode**: Automatically start a scenic shot (no target) after teleporting to a location (e.g. from Auto Mob Target) if spectate mode is disabled.
-- **Smooth Teleport**: Smoothly interpolate the camera position when switching targets for a cinematic effect.
-- **Persistence**: The cameraman role and all mode settings are saved and restored even after server restarts or player reconnections.
-- **Smart Restoration**: If the cameraman disconnects and reconnects, their state and active modes are automatically restored.
+- **Режим оператора** — назначение игрока оператором и переключение в режим наблюдателя.
+- **Режим новичков** — автоматическое переключение на недавно подключившихся игроков.
+- **Автоматическая ротация** — циклический выбор целей с настраиваемым интервалом.
+- **Наблюдение за мобами** — выбор ближайших живых существ вместо игроков.
+- **Автовыбор моба** — переключение на мобов, когда нет доступных игроков.
+- **Автоматический пейзажный режим** — запуск съёмки без цели после телепортации, если режим наблюдения отключён.
+- **Плавная телепортация** — кинематографичный переход между позициями камеры.
+- **Сохранение настроек** — настройки и назначение оператора сохраняются после перезапуска и повторного входа.
 
-## Commands
+## Команды
 
-### Management
-- `/cameraman set <player>`: Set the player who will act as the cameraman.
-- `/cameraman unset`: Unset the current cameraman and return them to Survival mode.
-- `/cameraman target <player>`: Manually set the target for the cameraman to follow.
-- `/cameraman showmessage <true|false>`: Enable/disable informational messages (e.g., "Moving to...", "Now spectating..."). Command feedback is still shown (default: true).
+Все команды требуют право `cameraman.use` (по умолчанию — OP). Названия команд и режимов камеры остаются латиницей.
 
-### Targeting
-- `/cameraman newcomer <true|false>`: Enable/disable Newcomer Mode (auto-spectate newly joined players).
-- `/cameraman rotation <true|false> [interval]`: Disable/Enable automatic rotation between targets. Optional interval in seconds (default: 60).
-- `/cameraman minrotationdistance <distance>`: Set minimum distance to skip close targets (default: 5.0).
-- `/cameraman mobtarget <true|false>`: Enable/disable Mob Target Mode (spectate mobs instead of players).
-- `/cameraman automob <true|false> [delay]`: Enable/disable Auto Mob Target (switch to mobs if no players). Optional delay in seconds (default: 60s).
+### Управление
 
-### Spectating
-- `/cameraman spectatemode <true|false> [perspective]`: Enable/disable Spectate Mode for **players**. Optional perspective (default: RANDOM).
-- `/cameraman mobspectatemode <true|false> [perspective]`: Enable/disable Spectate Mode for **mobs**. Optional perspective (default: RANDOM).
-- `/cameraman teleportsmooth <true|false> [duration]`: Enable/disable Smooth Teleport. Optional **minimum** duration in seconds (default: 3s).
-  - *Note: Actual duration adapts to distance based on `teleportSmoothSpeed` in config (Default: 50 blocks/s).*
-- `/cameraman mobnightvision <true|false>`: Enable/disable Mob Night Vision (Night Vision effect when targeting mobs).
-- `/cameraman nightvisionthreshold <0-15>`: Set threshold for Adaptive Night Vision (applied if light level <= value) (default: 7).
+- `/cameraman set <игрок>` — назначить оператора камеры.
+- `/cameraman unset` — снять назначение и вернуть оператора в режим выживания.
+- `/cameraman target <игрок>` — выбрать цель.
+- `/cameraman showmessage <true|false>` — включить или отключить информационные сообщения.
 
-### Scenic
-- `/cameraman scenic <true|false> [perspective]`: Enable/disable "Scenic Mode". Uses current location as anchor for cinematic shots without a target entity.
-- `/cameraman autoscenic <true|false> [perspective]`: Enable/disable "Auto Scenic". Automatically starts the specified scenic perspective when spectateMode is false after finding a target.
-- `/cameraman random <player|mob|scenic> <mode1,mode2...>`: Configure the list of perspectives used in RANDOM mode for each target type.
+### Выбор целей
 
-### Perspectives Configuration
-*Settings apply to the relevant perspectives (BEHIND, FRONT, ORBIT, DYNAMIC, FLYBY, CRANE, MOVE).*
+- `/cameraman newcomer <true|false>` — включить режим новичков.
+- `/cameraman rotation <true|false> [интервал]` — включить/отключить ротацию; интервал задаётся в секундах (по умолчанию 60).
+- `/cameraman minrotationdistance <расстояние>` — минимальное расстояние для пропуска близких целей (по умолчанию 5).
+- `/cameraman mobtarget <true|false>` — режим выбора мобов.
+- `/cameraman automob <true|false> [задержка]` — автоматический выбор мобов, если нет игроков.
 
-#### General
-- `/cameraman distance <value|min-max>`: Set distance (BEHIND, FRONT, ORBIT, FLYBY, CRANE) (default: 3.0-5.0).
-- `/cameraman height <value|min-max>`: Set height (BEHIND, FRONT, ORBIT, DYNAMIC) (default: 0.0-1.0).
+### Наблюдение и камера
 
-#### Orbit
-- `/cameraman orbitspeed <value|min-max>`: Set speed (degrees/tick) (default: 0.1).
-- `/cameraman orbitdirection <LEFT|RIGHT|RANDOM>`: Set direction (default: RANDOM).
+- `/cameraman spectatemode <true|false|RANDOM> [ракурс]` — режим наблюдения за игроками.
+- `/cameraman mobspectatemode <true|false|RANDOM> [ракурс]` — режим наблюдения за мобами.
+- `/cameraman teleportsmooth <true|false> [длительность]` — плавная телепортация; длительность в секундах.
+- `/cameraman mobnightvision <true|false>` — ночное зрение при съёмке мобов.
+- `/cameraman nightvisionthreshold <0-15>` — порог освещённости для адаптивного ночного зрения.
+- `/cameraman scenic <true|false> [ракурс]` — запустить/остановить съёмку без цели от текущей позиции.
+- `/cameraman autoscenic <true|false> [ракурс]` — автоматический запуск пейзажной съёмки.
+- `/cameraman random <player|mob|scenic> <режим1,режим2...>` — список ракурсов для случайного выбора.
 
-#### Dynamic
-- `/cameraman smoothness <value>`: Set smoothness (0.01 - 1.0) (default: 0.05).
+### Настройка ракурсов
 
-#### Flyby
-- `/cameraman flybyduration <seconds>`: Set loop duration (default: 30.0).
+- `/cameraman distance <значение|min-max>` — расстояние до цели.
+- `/cameraman height <значение|min-max>` — высота камеры.
+- `/cameraman orbitspeed <значение|min-max>` — скорость вращения камеры.
+- `/cameraman orbitdirection <LEFT|RIGHT|RANDOM>` — направление вращения.
+- `/cameraman smoothness <значение>` — плавность динамического слежения (0.01–1.0).
+- `/cameraman flybyduration <секунды>` — длительность цикла пролёта.
+- `/cameraman craneduration <секунды>` — длительность цикла крана.
+- `/cameraman craneheightmin <значение>` и `/cameraman craneheightmax <значение>` — нижняя и верхняя высота крана.
+- `/cameraman movedirection <x,y,z>` — направление движения относительно начального положения камеры; поддерживаются диапазоны.
+- `/cameraman movespeed <значение|min-max>` — скорость движения.
 
-#### Crane
-- `/cameraman craneduration <seconds>`: Set loop duration (default: 30.0).
-- `/cameraman craneheightmin <value>`: Set minimum height (default: 1.0).
-- `/cameraman craneheightmax <value>`: Set maximum height (default: 5.0).
+## Ракурсы
 
-#### Move
-- `/cameraman movedirection <x,y,z>`: Set direction vector relative to the camera's starting orientation (X=Right, Y=Up, Z=Forward). Supports ranges (e.g. "0.5-1.0").
-- `/cameraman movespeed <value|min-max>`: Set speed (blocks/tick) (default: 0.01).
+`POV` — вид от первого лица; `BEHIND` — камера позади цели; `FRONT` — камера перед целью; `ORBIT` — вращение вокруг цели; `DYNAMIC` и варианты `DYNAMIC_BEHIND`, `DYNAMIC_FRONT`, `DYNAMIC_POV` — плавное слежение; `FLYBY` — циклический пролёт; `CRANE` — вертикальное движение; `MOVE` — движение в заданном направлении; `FIX` — неподвижная камера; `RANDOM` — случайный выбор доступного ракурса.
 
-### Scenic Mode (Targetless Cinematics)
-Target a static location instead of a player/mob.
-`/cameraman scenic <true|false> [perspective]`
-*   `true`: Starts a scenic shot at your current location.
-*   `false`: Stops the scenic shot.
-*   `[perspective]`: Optional. The camera perspective to use (e.g., `ORBIT`, `FLYBY`, `MOVE`).
+Если режим наблюдения отключён, камера переместится только в начальную точку ракурса; динамические эффекты требуют включённого режима наблюдения.
 
-### Auto Scenic
-If enabled in `config.yml`, Scenic Mode will automatically start after teleporting to a target if `spectateMode` is false.
+## Установка
 
-## Perspectives
+1. Соберите проект командой `mvn clean package`.
+2. Скопируйте JAR из `target/` в папку `plugins` сервера Paper.
+3. Перезапустите сервер.
 
-This plugin offers various camera modes ("Perspectives") for spectating:
+## Конфигурация
 
-- **POV**: First-person view (standard Spectator mode).
-- **BEHIND**: Fixed position behind the target.
-  - Configurable via `distance` and `height`.
-- **FRONT**: Fixed position in front of the target, looking back at them.
-  - Configurable via `distance` and `height`.
-- **ORBIT**: The camera circles around the target at a fixed distance.
-  - Configurable via `distance` (radius), `height`, `orbitSpeed`, and `orbitDirection`.
-- **DYNAMIC**: A smooth "tracking" shot. The camera lags slightly behind the target (spring-arm effect), smoothing out sudden rotations and movements.
-  - Configurable via `distance`, `height`, and `dynamicSmoothness` (0.01-1.0) (default: 0.05).
-  - Variations:
-    - **DYNAMIC_BEHIND**: Follows from behind (Classic dynamic behavior).
-    - **DYNAMIC_FRONT**: Follows from the front, looking back at the target.
-    - **DYNAMIC_POV**: Follows from the eye position (approximate First-Person) with smoothing.
-- **FLYBY**: The camera moves continuously between two points relative to the target (e.g., flying past them). Loops back and forth.
-  - Configurable via `flybyDuration`.
-- **CRANE**: The camera moves vertically (up and down) while maintaining a fixed horizontal distance. Great for establishing shots.
-  - Configurable via `distance`, `craneDuration`, `craneHeightMin`, and `craneHeightMax`.
-- **MOVE**: The camera moves linearly in a specified direction relative to the start orientation.
-  - Configurable via `movedirection` (X=Right, Y=Up, Z=Forward), `movespeed`, `distance` (start offset back), and `height` (start offset up).
-- **FIX**: The camera remains static at the target location (plus height). Useful for Scenic Mode to create a tripod-like shot.
-- **RANDOM**: Automatically selects one of the above perspectives (including cinematic ones) at random each time a new target is chosen from the rotation list.
-
-> **Note**: If `spectatemode` or `mobspectatemode` is set to `false`, these perspectives will only teleport the cameraman to the **starting position** of the shot. Dynamic effects like orbiting or flying by require spectate mode to be enabled (true).
-
-## Permissions
-
-- `cameraman.use`: Allows access to all cameraman commands. Default: OP.
-
-## Installation
-
-1. Build the project using Maven:
-   ```bash
-   mvn clean package
-   ```
-2. Copy the generated jar file to your server's `plugins` folder.
-3. Restart the server.
-
-## Configuration
-
-The `config.yml` stores the UUID of the current cameraman and all mode settings to persist them across restarts.
-
-```yaml
-cameraman: <UUID>
-newcomerMode: true
-rotationMode: true
-rotationInterval: 60
-minRotationDistance: 5.0
-mobTargetMode: false
-autoMobTarget: true
-autoMobTargetDelay: 60
-autoScenic: true
-autoScenicPerspective: RANDOM
-teleportSmooth: false
-teleportSmoothDuration: 3
-teleportSmoothSpeed: 50.0
-spectateMode: true
-spectatePerspective: RANDOM
-mobSpectateMode: true
-mobSpectatePerspective: RANDOM
-mobNightVision: true
-showMessage: true
-nightVisionThreshold: 7
-spectateDistance: "3.0-5.0"
-spectateHeight: "0.0-1.0"
-orbitSpeed: "0.1"
-orbitDirection: "RANDOM"
-dynamicSmoothness: "0.05"
-flybyDuration: "30.0"
-craneDuration: "30.0"
-craneHeightMin: "1.0"
-craneHeightMax: "5.0"
-moveX: "-1-1"
-moveY: "0-0.1"
-moveZ: "-0.1-0.1"
-moveSpeed: "0.01"
-randomPlayerPerspectives:
-  - POV
-  - BEHIND
-  - FRONT
-  - ORBIT
-  - FLYBY
-  - MOVE
-  - CRANE
-  - DYNAMIC_BEHIND
-  - DYNAMIC_FRONT
-  - DYNAMIC_POV
-randomScenicPerspectives:
-  - ORBIT
-  - FLYBY
-  - MOVE
-  - CRANE
-  - FIX
-randomMobPerspectives:
-  - POV
-  - BEHIND
-  - FRONT
-  - ORBIT
-  - FLYBY
-  - CRANE
-  - DYNAMIC_BEHIND
-  - DYNAMIC_FRONT
-  - DYNAMIC_POV
-```
+Файл `config.yml` хранит UUID оператора и параметры режимов. После первого запуска плагин создаст файл конфигурации со значениями по умолчанию.

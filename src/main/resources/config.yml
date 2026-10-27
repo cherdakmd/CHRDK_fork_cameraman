@@ -1,97 +1,97 @@
-# Cameraman Plugin Configuration
+# Конфигурация плагина «Кинематографичная камера»
 
-# The UUID of the current cameraman.
-# This is automatically updated when /cameraman set is used.
-# The UUID of the current cameraman.
-# This is automatically updated when /cameraman set is used.
+# UUID текущего оператора камеры.
+# Значение обновляется автоматически при использовании /cameraman set.
+# UUID текущего оператора камеры.
+# Значение обновляется автоматически при использовании /cameraman set.
 cameraman: ""
 
-# Whether Newcomer Mode is enabled.
+# Включён ли режим новичков.
 newcomerMode: true
 
-# Whether Rotation Mode is enabled.
+# Включён ли режим ротации.
 rotationMode: true
 
-# The# Interval in seconds for rotation.
+# Интервал ротации в секундах.
 rotationInterval: 60
-# Minimum distance from current camera location to next target. Targets closer than this will be skipped during rotation.
+# Минимальное расстояние от камеры до следующей цели. Более близкие цели пропускаются.
 minRotationDistance: 5.0
 
-# Whether Mob Target Mode is enabled.
+# Включён ли режим выбора мобов.
 mobTargetMode: false
 
-# Whether Auto Mob Target is enabled.
+# Включён ли автоматический выбор мобов.
 autoMobTarget: true
 
-# The delay (in seconds) before switching to Mob Target Mode when no players are available.
-# The delay (in seconds) before switching to Mob Target Mode when no players are available.
+# Задержка в секундах перед выбором моба, если игроков нет.
+# Задержка в секундах перед выбором моба, если игроков нет.
 autoMobTargetDelay: 60
 
-# Auto Scenic Mode (Activates Scenic Mode automatically when Spectator Mode is disabled)
-# If spectateMode is false, after teleporting to the target, a Scenic Task will start.
+# Автоматический пейзажный режим (включается, если режим наблюдателя отключён).
+# Если spectateMode отключён, после телепортации к цели запускается пейзажная съёмка.
 autoScenic: true
 autoScenicPerspective: RANDOM
 
-# Teleport settings
-# If true, the camera will smoothly interpolate to the new target instead of instantly teleporting.
+# Настройки телепортации
+# При включении камера плавно перемещается к новой цели вместо мгновенной телепортации.
 teleportSmooth: false
 
-# The duration (in seconds) for Smooth Teleport.
+# Длительность плавной телепортации в секундах.
 teleportSmoothDuration: 3
-# Speed (blocks per second) for smooth teleport. Used to calculate duration for long distances.
-# Duration = Distance / Speed. If calculated duration < teleportSmoothDuration, the fixed duration is used.
+# Скорость плавной телепортации (блоков в секунду), используется для расчёта длительности на больших расстояниях.
+# Длительность = расстояние / скорость. Если результат меньше teleportSmoothDuration, применяется заданная длительность.
 teleportSmoothSpeed: 50.0
 
-# Whether Spectate Mode is enabled for players.
+# Включён ли режим наблюдения за игроками.
 spectateMode: true
 
-# The perspective for Spectate Mode (POV, BEHIND, FRONT, RANDOM).
+# Ракурс наблюдения за игроками (POV, BEHIND, FRONT, RANDOM).
 spectatePerspective: RANDOM
 
-# Whether Spectate Mode is enabled for mobs.
+# Включён ли режим наблюдения за мобами.
 mobSpectateMode: true
 
-# The perspective for Mob Spectate Mode (POV, BEHIND, FRONT, RANDOM).
-# The perspective for Mob Spectate Mode (POV, BEHIND, FRONT, RANDOM).
+# Ракурс наблюдения за мобами (POV, BEHIND, FRONT, RANDOM).
+# Ракурс наблюдения за мобами (POV, BEHIND, FRONT, RANDOM).
 mobSpectatePerspective: RANDOM
 
-# Whether Mob Night Vision is enabled.
+# Включено ли ночное зрение при наблюдении за мобами.
 mobNightVision: true
 
-# The distance for BEHIND/FRONT perspectives. Can be a fixed number (e.g., "3.0") or a range (e.g., "3.0-6.0").
+# Расстояние для ракурсов BEHIND/FRONT: число (например, "3.0") или диапазон (например, "3.0-6.0").
 spectateDistance: "3.0-5.0"
 
-# The height for BEHIND/FRONT perspectives. Can be a fixed number (e.g., "1.0") or a range (e.g., "1.0-3.0").
+# Высота для ракурсов BEHIND/FRONT: число (например, "1.0") или диапазон (например, "1.0-3.0").
 spectateHeight: "0.0-1.0"
 
-# The speed of rotation around the target in ORBIT perspective (degrees per tick).
-# Can be a single number (e.g. 1.0) or a range (e.g. 0.5-1.5).
+# Скорость вращения вокруг цели в ракурсе ORBIT (градусов за тик).
+# Число (например, 1.0) или диапазон (например, 0.5-1.5).
 orbitSpeed: "0.1"
 
-# The direction for ORBIT perspective (LEFT, RIGHT, RANDOM).
+# Направление вращения ORBIT (LEFT, RIGHT, RANDOM).
 orbitDirection: "RANDOM"
 
-# Smoothness for DYNAMIC perspective (0.01 - 1.0). Lower is smoother/slower.
+# Плавность DYNAMIC (0.01–1.0). Чем меньше значение, тем плавнее и медленнее движение.
 dynamicSmoothness: "0.05"
 
-# Duration for FLYBY perspective loop (seconds).
+# Длительность цикла ракурса FLYBY (секунды).
 flybyDuration: "30.0"
 
-# Duration for CRANE perspective loop (seconds).
+# Длительность цикла ракурса CRANE (секунды).
 craneDuration: "30.0"
 
-# Height range for CRANE perspective.
+# Диапазон высоты ракурса CRANE.
 craneHeightMin: "1.0"
 craneHeightMax: "5.0"
 
-# Settings for MOVE perspective (Simple linear movement)
-# format: "value" or "min-max"
+# Настройки ракурса MOVE (линейное движение).
+# Формат: "значение" или "минимум-максимум"
 moveX: "-1-1"
 moveY: "0-0.1"
 moveZ: "-0.1-0.1"
 moveSpeed: "0.01"
 
-# List of perspectives to choose from when using RANDOM mode for Players.
+# Список ракурсов для случайного выбора при наблюдении за игроками.
 randomPlayerPerspectives:
   - POV
   - BEHIND
@@ -103,7 +103,7 @@ randomPlayerPerspectives:
   - DYNAMIC_FRONT
   - DYNAMIC_POV
 
-# List of perspectives to choose from when using RANDOM mode for Scenic Mode.
+# Список ракурсов для случайного выбора в пейзажном режиме.
 randomScenicPerspectives:
   - ORBIT
   - FLYBY
@@ -111,7 +111,7 @@ randomScenicPerspectives:
   - CRANE
   - FIX
 
-# List of perspectives to choose from when using RANDOM mode for Mobs.
+# Список ракурсов для случайного выбора при наблюдении за мобами.
 randomMobPerspectives:
   - POV
   - BEHIND
