@@ -81,7 +81,7 @@ public class CameramanManager {
             try {
                 this.cameramanId = UUID.fromString(uuidString);
             } catch (IllegalArgumentException e) {
-                plugin.getLogger().warning("Invalid cameraman UUID in config: " + uuidString);
+                plugin.getLogger().warning("Некорректный UUID оператора в конфигурации: " + uuidString);
             }
         }
 
@@ -187,7 +187,7 @@ public class CameramanManager {
             try {
                 return SpectatePerspective.valueOf(s.toUpperCase());
             } catch (IllegalArgumentException e) {
-                plugin.getLogger().warning("Invalid perspective in config: " + s);
+                plugin.getLogger().warning("Некорректный ракурс в конфигурации: " + s);
                 return null;
             }
         }).filter(p -> p != null && p != SpectatePerspective.RANDOM).collect(Collectors.toList());
@@ -210,14 +210,14 @@ public class CameramanManager {
             Player oldCameraman = Bukkit.getPlayer(this.cameramanId);
             if (oldCameraman != null) {
                 oldCameraman.setGameMode(GameMode.SURVIVAL);
-                oldCameraman.sendMessage("You are no longer the cameraman.");
+                oldCameraman.sendMessage("Вы больше не оператор камеры.");
             }
         }
         this.cameramanId = player.getUniqueId();
         plugin.getConfig().set("cameraman", this.cameramanId.toString());
         plugin.saveConfig();
         player.setGameMode(GameMode.SPECTATOR);
-        player.sendMessage("You are now the cameraman!");
+        player.sendMessage("Вы назначены оператором камеры!");
     }
 
     public Player getCameraman() {
@@ -229,7 +229,7 @@ public class CameramanManager {
     public void restoreCameraman(Player player) {
         if (cameramanId != null && cameramanId.equals(player.getUniqueId())) {
             player.setGameMode(GameMode.SPECTATOR);
-            player.sendMessage("Welcome back, Cameraman!");
+            player.sendMessage("С возвращением, оператор!");
 
         }
     }
@@ -239,7 +239,7 @@ public class CameramanManager {
             Player cameraman = Bukkit.getPlayer(cameramanId);
             if (cameraman != null) {
                 cameraman.setGameMode(GameMode.SURVIVAL);
-                cameraman.sendMessage("You are no longer the cameraman.");
+                cameraman.sendMessage("Вы больше не оператор камеры.");
             }
             cameramanId = null;
             plugin.getConfig().set("cameraman", null);
@@ -263,20 +263,20 @@ public class CameramanManager {
 
             if (target instanceof Player) {
                 if (cameraman.getUniqueId().equals(target.getUniqueId())) {
-                    return; // Cannot spectate self
+                    return; // Невозможно наблюдать за self
                 }
                 // If targeting a player, disable mob target mode (conceptually, we are focusing
                 // on a player now)
                 if (mobTargetMode) {
                     setMobTargetMode(false);
-                    sendInfoMessage(cameraman, "Mob Target Mode disabled because a player was targeted.");
+                    sendInfoMessage(cameraman, "Режим выбора мобов отключён: выбрана цель-игрок.");
                 }
                 lastPlayerTargetTime = System.currentTimeMillis();
             }
 
             if (cameraman.getGameMode() != GameMode.SPECTATOR) {
                 sendInfoMessage(cameraman,
-                        "Cannot spectate " + target.getName() + " because you are not in Spectator mode.");
+                        "Невозможно наблюдать за " + target.getName() + " — вы не в режиме наблюдателя.");
                 return;
             }
 
@@ -329,17 +329,17 @@ public class CameramanManager {
                 if (activeSpectateMode) {
                     if (activePerspective == SpectatePerspective.POV) {
                         cameraman.setSpectatorTarget(target);
-                        sendInfoMessage(cameraman, "Now spectating: " + target.getName() + " (POV)");
+                        sendInfoMessage(cameraman, "Наблюдение за: " + target.getName() + " (POV)");
                     } else {
                         // For BEHIND/FRONT/ORBIT, we don't use setSpectatorTarget (it forces POV)
                         // Instead we start the positioning task
                         cameraman.setSpectatorTarget(null);
                         startSpectateTask(cameraman, target, activePerspective, maxDist, maxHeight);
                         sendInfoMessage(cameraman,
-                                "Now spectating: " + target.getName() + " (" + activePerspective + ")");
+                                "Наблюдение за: " + target.getName() + " (" + activePerspective + ")");
                     }
                 } else {
-                    sendInfoMessage(cameraman, "Arrived at: " + target.getName());
+                    sendInfoMessage(cameraman, "Прибытие к: " + target.getName());
 
                     // Auto Scenic Check (if not in spectate mode)
                     if (autoScenic) {
@@ -356,7 +356,7 @@ public class CameramanManager {
             if (teleportSmooth) {
                 // Check if in same world
                 if (cameraman.getWorld().equals(target.getLocation().getWorld())) {
-                    sendInfoMessage(cameraman, "Moving to " + target.getName() + "...");
+                    sendInfoMessage(cameraman, "Перемещение к " + target.getName() + "...");
 
                     // Calculate duration based on distance and speed
                     double distanceToTarget = cameraman.getLocation().distance(target.getLocation());
@@ -386,7 +386,7 @@ public class CameramanManager {
                     Location targetLoc = shot.getNextLocation(cameraman, new EntityTarget(target), 0); // Get initial
                                                                                                        // position
                     cameraman.teleport(targetLoc);
-                    sendInfoMessage(cameraman, "Moved to: " + target.getName());
+                    sendInfoMessage(cameraman, "Перемещено к: " + target.getName());
 
                     // Auto Scenic Check (if not in spectate mode)
                     if (autoScenic) {
@@ -410,7 +410,7 @@ public class CameramanManager {
             stopLightCheckTask();
             stopSpectateTask();
             removeCameramanNightVision(cameraman);
-            sendInfoMessage(cameraman, "Stopped spectating.");
+            sendInfoMessage(cameraman, "Наблюдение остановлено.");
         }
     }
 
@@ -491,7 +491,7 @@ public class CameramanManager {
         plugin.saveConfig();
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Newcomer mode set to: " + enabled);
+            sendInfoMessage(cameraman, "Режим новичков установлен: " + enabled);
         }
     }
 
@@ -513,7 +513,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Rotation mode set to: " + enabled + " (Interval: " + intervalSeconds + "s)");
+            sendInfoMessage(cameraman, "Режим ротации установлен: " + enabled + " (интервал: " + intervalSeconds + "s)");
         }
     }
 
@@ -543,7 +543,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Mob Target Mode set to: " + enabled);
+            sendInfoMessage(cameraman, "Режим выбора мобов установлен: " + enabled);
         }
     }
 
@@ -562,7 +562,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Auto Mob Target set to: " + enabled + " (Delay: " + delay + "s)");
+            sendInfoMessage(cameraman, "Автовыбор мобов установлен: " + enabled + " (задержка: " + delay + "s)");
         }
     }
 
@@ -601,7 +601,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Smooth Teleport set to: " + enabled + " (Duration: " + duration + "s)");
+            sendInfoMessage(cameraman, "Плавная телепортация установлена: " + enabled + " (длительность: " + duration + "s)");
         }
     }
 
@@ -634,7 +634,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Spectate Mode set to: " + (this.spectateMode == SpectateState.RANDOM ? "RANDOM"
+            sendInfoMessage(cameraman, "Режим наблюдения установлен: " + (this.spectateMode == SpectateState.RANDOM ? "RANDOM"
                     : (this.spectateMode == SpectateState.ENABLED)));
         }
     }
@@ -646,7 +646,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Spectate Perspective (Player) set to: " + perspective);
+            sendInfoMessage(cameraman, "Ракурс наблюдения (игроки): " + perspective);
         }
     }
 
@@ -676,7 +676,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Spectate Perspective (Mob) set to: " + perspective);
+            sendInfoMessage(cameraman, "Ракурс наблюдения (мобы): " + perspective);
         }
     }
 
@@ -704,7 +704,7 @@ public class CameramanManager {
 
         // Ensure Spectator mode
         if (cameraman.getGameMode() != GameMode.SPECTATOR) {
-            sendInfoMessage(cameraman, "You must be in Spectator Mode to use Scenic Mode.");
+            sendInfoMessage(cameraman, "Для пейзажного режима необходимо находиться в режиме наблюдателя.");
             return;
         }
 
@@ -720,7 +720,7 @@ public class CameramanManager {
         }
 
         // Display the resolved perspective
-        sendInfoMessage(cameraman, "Scenic Perspective: " + actualPerspective.name());
+        sendInfoMessage(cameraman, "Пейзажный ракурс: " + actualPerspective.name());
 
         // Parse configs directly or reuse existing fields?
         // We can reuse the fields.
@@ -805,7 +805,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Mob Night Vision set to: " + enabled);
+            sendInfoMessage(cameraman, "Ночное зрение для мобов установлено: " + enabled);
         }
     }
 
@@ -816,7 +816,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Show Message set to: " + enabled);
+            sendInfoMessage(cameraman, "Показ сообщений установлен: " + enabled);
         }
     }
 
@@ -827,7 +827,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Night Vision Threshold set to: " + threshold);
+            sendInfoMessage(cameraman, "Порог ночного зрения установлен: " + threshold);
         }
     }
 
@@ -838,7 +838,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Spectate Distance set to: " + distance);
+            sendInfoMessage(cameraman, "Расстояние камеры установлено: " + distance);
         }
     }
 
@@ -849,7 +849,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Spectate Height set to: " + height);
+            sendInfoMessage(cameraman, "Высота камеры установлена: " + height);
         }
     }
 
@@ -892,7 +892,7 @@ public class CameramanManager {
         plugin.saveConfig();
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Orbit Speed set to: " + speed);
+            sendInfoMessage(cameraman, "Скорость вращения установлена: " + speed);
         }
     }
 
@@ -903,7 +903,7 @@ public class CameramanManager {
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Min Rotation Distance set to: " + distance);
+            sendInfoMessage(cameraman, "Минимальное расстояние ротации установлено: " + distance);
         }
     }
 
@@ -917,7 +917,7 @@ public class CameramanManager {
         plugin.saveConfig();
         Player cameraman = getCameraman();
         if (cameraman != null) {
-            sendInfoMessage(cameraman, "Orbit Direction set to: " + direction);
+            sendInfoMessage(cameraman, "Направление вращения установлено: " + direction);
         }
     }
 
@@ -930,7 +930,7 @@ public class CameramanManager {
         plugin.getConfig().set("dynamicSmoothness", val);
         plugin.saveConfig();
         if (getCameraman() != null)
-            sendInfoMessage(getCameraman(), "Dynamic Smoothness: " + val);
+            sendInfoMessage(getCameraman(), "Плавность слежения: " + val);
     }
 
     public void setFlybyDuration(String val) {
@@ -938,7 +938,7 @@ public class CameramanManager {
         plugin.getConfig().set("flybyDuration", val);
         plugin.saveConfig();
         if (getCameraman() != null)
-            sendInfoMessage(getCameraman(), "Flyby Duration: " + val);
+            sendInfoMessage(getCameraman(), "Длительность пролёта: " + val);
     }
 
     public void setCraneDuration(String val) {
@@ -946,7 +946,7 @@ public class CameramanManager {
         plugin.getConfig().set("craneDuration", val);
         plugin.saveConfig();
         if (getCameraman() != null)
-            sendInfoMessage(getCameraman(), "Crane Duration: " + val);
+            sendInfoMessage(getCameraman(), "Длительность крана: " + val);
     }
 
     public void setRandomPerspectives(String type, List<String> perspectives) {
@@ -974,7 +974,7 @@ public class CameramanManager {
         plugin.getConfig().set("moveSpeed", speed);
         plugin.saveConfig();
         if (getCameraman() != null) {
-            sendInfoMessage(getCameraman(), "Move Speed set to: " + speed);
+            sendInfoMessage(getCameraman(), "Скорость движения установлена: " + speed);
         }
     }
 
@@ -987,7 +987,7 @@ public class CameramanManager {
         plugin.getConfig().set("moveZ", z);
         plugin.saveConfig();
         if (getCameraman() != null) {
-            sendInfoMessage(getCameraman(), "Move Direction set to: X=" + x + ", Y=" + y + ", Z=" + z);
+            sendInfoMessage(getCameraman(), "Направление движения установлено: X=" + x + ", Y=" + y + ", Z=" + z);
         }
     }
 
