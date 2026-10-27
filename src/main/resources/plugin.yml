@@ -1,7 +1,7 @@
 name: Кинематографичная камера
 version: '${project.version}'
 main: xyz.shibomb.cameraman.CameramanPlugin
-api-version: '1.20'
+api-version: '26.3'
 commands:
   cameraman:
     description: Управление кинематографичной камерой

@@ -1,35 +1,35 @@
-# Feature Specification: Spectate Perspectives
+# Спецификация: режимы наблюдения и ракурсы
 
-## 1. Summary
+## 1. Краткое описание
 
-When a target is selected, "Perspectives" control the spatial relationship between the Cameraman's camera and the target entity.
+После выбора цели ракурс определяет положение камеры относительно неё.
 
-## 2. Mode Toggles
+## 2. Переключение режимов
 
-### 2.1 Player Spectate Mode
+### 2.1 Наблюдение за игроками
 
-- **Command**: `/cameraman spectatemode <true|false> [perspective]`
-- Enables/disables spectating players. When `true`, enables continuous tracking. When `false`, the cameraman simply teleports to the initial perspective start point.
+- **Команда**: `/cameraman spectatemode <true|false> [perspective]`
+- Включает или отключает наблюдение за игроками. При `true` камера непрерывно следует за целью. При `false` оператор только перемещается в начальную точку выбранного ракурса.
 
-### 2.2 Mob Spectate Mode
+### 2.2 Наблюдение за мобами
 
-- **Command**: `/cameraman mobspectatemode <true|false> [perspective]`
-- Enables/disables spectating mobs. Includes an option (`mobnightvision`) to apply a Night Vision effect based on a light level threshold.
+- **Команда**: `/cameraman mobspectatemode <true|false> [perspective]`
+- Включает или отключает наблюдение за мобами. Параметр `mobnightvision` позволяет включить эффект ночного зрения с учётом порога освещённости.
 
-### 2.3 Smooth Teleport
+### 2.3 Плавная телепортация
 
-- **Command**: `/cameraman teleportsmooth <true|false> [duration]`
-- When switching targets, interpolates the camera position visually. Duration scales based on `teleportSmoothSpeed` up to the minimum duration.
+- **Команда**: `/cameraman teleportsmooth <true|false> [duration]`
+- При смене цели камера плавно перемещается на новую позицию. Длительность рассчитывается на основе `teleportSmoothSpeed` и не может быть меньше минимальной заданной длительности.
 
-## 3. Available Perspectives
+## 3. Доступные ракурсы
 
-1. **POV**: First-person view (standard Minecraft Spectator behavior).
-2. **BEHIND**: Fixed position behind target (`distance`, `height`).
-3. **FRONT**: Fixed position in front of target (`distance`, `height`).
-4. **ORBIT**: Circles around target (`orbitSpeed`, `orbitDirection`, `distance`, `height`).
-5. **DYNAMIC**: Spring-arm, delayed tracking effect smoothing out target movements (`dynamicSmoothness`, `distance`, `height`). Includes `_BEHIND`, `_FRONT`, `_POV`.
-6. **FLYBY**: Continuous sweeping motion looping back and forth (`flybyDuration`).
-7. **CRANE**: Vertical boom movement while holding horizontal distance (`craneHeightMin`, `craneHeightMax`, `craneDuration`).
-8. **MOVE**: Linear motion along a defined directional vector (`moveDirection`, `moveSpeed`).
-9. **FIX**: Strictly static tripod shot at a location.
-10. **RANDOM**: Randomly chooses one of the active perspectives based on the active target type's list (`randomPlayerPerspectives`, `randomMobPerspectives`, `randomScenicPerspectives`).
+1. **POV**: вид от первого лица (стандартное поведение режима наблюдателя Minecraft).
+2. **BEHIND**: фиксированная позиция позади цели (`distance`, `height`).
+3. **FRONT**: фиксированная позиция перед целью (`distance`, `height`).
+4. **ORBIT**: вращение вокруг цели (`orbitSpeed`, `orbitDirection`, `distance`, `height`).
+5. **DYNAMIC**: плавное слежение с эффектом пружинного подвеса (`dynamicSmoothness`, `distance`, `height`); варианты `_BEHIND`, `_FRONT`, `_POV` задают направление.
+6. **FLYBY**: непрерывный пролёт туда и обратно (`flybyDuration`).
+7. **CRANE**: вертикальное перемещение при сохранении горизонтального расстояния (`craneHeightMin`, `craneHeightMax`, `craneDuration`).
+8. **MOVE**: линейное движение по заданному вектору (`moveDirection`, `moveSpeed`).
+9. **FIX**: полностью неподвижный ракурс на месте.
+10. **RANDOM**: случайный выбор из списка для текущего типа цели (`randomPlayerPerspectives`, `randomMobPerspectives`, `randomScenicPerspectives`).

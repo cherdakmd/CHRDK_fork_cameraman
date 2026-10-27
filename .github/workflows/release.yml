@@ -21,11 +21,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
-      - name: Set up Java 17 and Maven cache
+      - name: Set up Java 25 and Maven cache
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
           cache: maven
       - name: Build plugin
         run: mvn --batch-mode --no-transfer-progress clean package

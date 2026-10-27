@@ -4,6 +4,8 @@
 
 Плагин для сервера Minecraft Paper: назначайте игрока оператором камеры и автоматически снимайте игроков и мобов с разных ракурсов.
 
+**Совместимость:** Paper 26.3 или новее, Java 25+. Скачать готовый файл можно на странице [релиза 26.3](https://github.com/cherdakmd/CHRDK_fork_cameraman/releases/tag/v26.3).
+
 ## Связь и новости
 
 Telegram: [https://t.me/cherdakmd](https://t.me/cherdakmd)

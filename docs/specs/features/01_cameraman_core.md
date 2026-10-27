@@ -1,38 +1,36 @@
-# Feature Specification: Cameraman Core & Persistence
+# Спецификация: оператор камеры и сохранение состояния
 
-## 1. Summary
+## 1. Краткое описание
 
-The core system handles managing who is the Cameraman, applying the appropriate game modes, and ensuring that settings persist across server restarts or player reconnections.
+Основная система управляет назначением оператора камеры, устанавливает необходимые игровые режимы и сохраняет настройки между перезапусками сервера и повторными подключениями игрока.
 
-## 2. Mechanics
+## 2. Механики
 
-### 2.1 Managing the Cameraman
+### 2.1 Назначение оператора камеры
 
-- **Command**: `/cameraman set <player>`
-  - Action: Sets the target player as the Cameraman.
-  - State: Puts them into Spectator mode.
-- **Command**: `/cameraman unset`
-  - Action: Removes the Cameraman status.
-  - State: Returns them to Survival mode.
+- **Команда**: `/cameraman set <player>`
+  - **Действие**: назначает указанного игрока оператором камеры.
+  - **Состояние**: переводит игрока в режим наблюдателя.
+- **Команда**: `/cameraman unset`
+  - **Действие**: снимает назначение оператора.
+  - **Состояние**: возвращает игрока в режим выживания.
 
-### 2.2 Global Settings Configuration
+### 2.2 Общие настройки
 
-- **Command**: `/cameraman showmessage <true|false>`
-  - Toggles all informational chat messages and automatic status updates for the cameraman (e.g., "Moving to...", "Now spectating...", "Auto-switched to...", "Mob Target Mode set to: true").
-  - Regardless of who executes a `/cameraman` settings command, the notification broadcasted to the cameraman respects this flag.
-  - Default: `true`.
+- **Команда**: `/cameraman showmessage <true|false>`
+  - Включает и отключает информационные сообщения в чате и автоматические уведомления оператору (например, о перемещении, начале наблюдения, смене цели и режиме выбора мобов).
+  - Уведомления оператору подчиняются этой настройке независимо от того, кто выполнил команду настройки.
+  - Значение по умолчанию: `true`.
 
-### 2.3 Persistence & Restoration
+### 2.3 Сохранение и восстановление
 
-- All settings, including the current Cameraman UUID, are saved to `config.yml`.
-- If the server restarts, the plugin reads `config.yml` on enable and restores the Cameraman.
-- If the Cameraman disconnects:
-  - The plugin pauses cameraman operations gracefully.
-- If the Cameraman reconnects:
-  - The plugin resumes operations automatically using saved states.
+- Все настройки, включая UUID текущего оператора, сохраняются в `config.yml`.
+- При запуске сервера плагин загружает конфигурацию и восстанавливает назначение оператора.
+- При отключении оператора работа камеры корректно приостанавливается.
+- При повторном подключении оператора работа автоматически возобновляется с сохранёнными настройками.
 
-### 2.4 Permissions
+### 2.4 Разрешения
 
-- **Node**: `cameraman.use`
-- **Default**: `OP`
-- Controls access to all `/cameraman` commands.
+- **Право**: `cameraman.use`
+- **По умолчанию**: `OP`
+- Даёт доступ ко всем командам `/cameraman`.
