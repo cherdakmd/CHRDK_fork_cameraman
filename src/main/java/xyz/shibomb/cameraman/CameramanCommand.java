@@ -19,9 +19,11 @@ import org.jetbrains.annotations.NotNull;
 public class CameramanCommand implements CommandExecutor, TabCompleter {
 
     private final CameramanManager manager;
+    private final Messages messages;
 
     public CameramanCommand(CameramanManager manager) {
         this.manager = manager;
+        this.messages = manager.getMessages();
     }
 
     private static final Map<String, String> RUSSIAN_SUBCOMMANDS = Map.ofEntries(
@@ -146,7 +148,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         if (value.equalsIgnoreCase("false")) {
             return false;
         }
-        sender.sendMessage("Неверное значение: укажите true или false.");
+        sender.sendMessage(messages.get("invalid-boolean"));
         return null;
     }
 
@@ -159,13 +161,13 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         try {
             return SpectatePerspective.valueOf(value.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            sender.sendMessage("Неверный ракурс. Доступные ракурсы: " +
-                    Arrays.stream(SpectatePerspective.values()).map(Enum::name).collect(java.util.stream.Collectors.joining(", ")));
+            sender.sendMessage(messages.get("invalid-perspective",
+                    Arrays.stream(SpectatePerspective.values()).map(Enum::name).collect(java.util.stream.Collectors.joining(", "))));
             return null;
         }
     }
 
-    private Long parsePositiveLongArgument(CommandSender sender, String value, String label) {
+    private Long parsePositiveLongArgument(CommandSender sender, String value) {
         try {
             long parsed = Long.parseLong(value);
             if (parsed > 0 && parsed <= Long.MAX_VALUE / 20L) {
@@ -174,7 +176,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         } catch (NumberFormatException ignored) {
             // Report a single user-friendly validation message below.
         }
-        sender.sendMessage("Неверное значение параметра «" + label + "»: требуется целое положительное число в допустимом диапазоне.");
+        sender.sendMessage(messages.get("invalid-integer"));
         return null;
     }
 
@@ -214,35 +216,35 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         switch (subCommand) {
             case "set":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman set <player>");
+                    sender.sendMessage(messages.get("usage-set"));
                     return true;
                 }
                 Player player = Bukkit.getPlayer(args[1]);
                 if (player == null) {
-                    sender.sendMessage("Игрок не найден.");
+                    sender.sendMessage(messages.get("player-not-found"));
                     return true;
                 }
                 manager.setCameraman(player);
-                sender.sendMessage("Оператор камеры назначен: " + player.getName());
+                sender.sendMessage(messages.get("cameraman-set", player.getName()));
                 break;
 
             case "unset":
                 manager.removeCameraman();
-                sender.sendMessage("Оператор камеры снят.");
+                sender.sendMessage(messages.get("cameraman-unset"));
                 break;
 
             case "target":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman target <player>");
+                    sender.sendMessage(messages.get("usage-target"));
                     return true;
                 }
                 Player target = Bukkit.getPlayer(args[1]);
                 if (target == null) {
-                    sender.sendMessage("Игрок не найден.");
+                    sender.sendMessage(messages.get("player-not-found"));
                     return true;
                 }
                 manager.setTarget(target);
-                sender.sendMessage("Цель выбрана: " + target.getName());
+                sender.sendMessage(messages.get("target-set", target.getName()));
                 break;
 
             case "clear":
@@ -251,19 +253,19 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
 
             case "newcomer":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman newcomer <true/false>");
+                    sender.sendMessage(messages.get("usage-newcomer"));
                     return true;
                 }
                 Boolean newcomerModeArg = parseBooleanArgument(sender, args[1]);
                 if (newcomerModeArg == null) return true;
                 boolean newcomerMode = newcomerModeArg;
                 manager.setNewcomerMode(newcomerMode);
-                sender.sendMessage("Режим новичков: " + newcomerMode);
+                sender.sendMessage(messages.get("newcomer-mode", newcomerMode));
                 break;
 
             case "rotation":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman rotation <true|false> [interval]");
+                    sender.sendMessage(messages.get("usage-rotation"));
                     return true;
                 }
                 Boolean rotEnabledArg = parseBooleanArgument(sender, args[1]);
@@ -271,47 +273,47 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 boolean rotEnabled = rotEnabledArg;
                 long interval = 60L;
                 if (args.length >= 3) {
-                    Long parsedInterval = parsePositiveLongArgument(sender, args[2], "интервал");
+                    Long parsedInterval = parsePositiveLongArgument(sender, args[2]);
                     if (parsedInterval == null) return true;
                     interval = parsedInterval;
                 }
                 manager.setRotationMode(rotEnabled, interval);
-                sender.sendMessage("Режим ротации: " + rotEnabled); // Changed to rotEnabled for consistency
+                sender.sendMessage(messages.get("rotation-mode", rotEnabled)); // Changed to rotEnabled for consistency
                 break;
 
             case "minrotationdistance":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman minrotationdistance <distance>");
+                    sender.sendMessage(messages.get("usage-min-distance"));
                     return true;
                 }
                 try {
                     double dist = Double.parseDouble(args[1]);
                     if (!Double.isFinite(dist) || dist < 0) {
-                        sender.sendMessage("Расстояние должно быть конечным числом не меньше нуля.");
+                        sender.sendMessage(messages.get("distance-negative"));
                         return true;
                     }
                     manager.setMinRotationDistance(dist);
-                    sender.sendMessage("Минимальное расстояние ротации: " + dist);
+                    sender.sendMessage(messages.get("min-distance-set", dist));
                 } catch (NumberFormatException e) {
-                    sender.sendMessage("Неверное расстояние. Укажите число не меньше нуля.");
+                    sender.sendMessage(messages.get("invalid-distance"));
                 }
                 break;
 
             case "mobtarget":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman mobtarget <true/false>");
+                    sender.sendMessage(messages.get("usage-mobtarget"));
                     return true;
                 }
                 Boolean mobTargetModeArg = parseBooleanArgument(sender, args[1]);
                 if (mobTargetModeArg == null) return true;
                 boolean mobTargetMode = mobTargetModeArg;
                 manager.setMobTargetMode(mobTargetMode);
-                sender.sendMessage("Режим выбора мобов: " + mobTargetMode);
+                sender.sendMessage(messages.get("mob-target-mode", mobTargetMode));
                 break;
 
             case "automob":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman automob <true/false> [delay]");
+                    sender.sendMessage(messages.get("usage-automob"));
                     return true;
                 }
                 Boolean autoMobTargetArg = parseBooleanArgument(sender, args[1]);
@@ -319,17 +321,17 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 boolean autoMobTarget = autoMobTargetArg;
                 long delay = 60L;
                 if (args.length >= 3) {
-                    Long parsedDelay = parsePositiveLongArgument(sender, args[2], "задержка");
+                    Long parsedDelay = parsePositiveLongArgument(sender, args[2]);
                     if (parsedDelay == null) return true;
                     delay = parsedDelay;
                 }
                 manager.setAutoMobTarget(autoMobTarget, delay);
-                sender.sendMessage("Автовыбор мобов: " + autoMobTarget);
+                sender.sendMessage(messages.get("auto-mob-target", autoMobTarget));
                 break;
 
             case "teleportsmooth":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman teleportsmooth <true/false> [duration]");
+                    sender.sendMessage(messages.get("usage-teleport-smooth"));
                     return true;
                 }
                 Boolean teleportSmoothArg = parseBooleanArgument(sender, args[1]);
@@ -337,22 +339,22 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 boolean teleportSmooth = teleportSmoothArg;
                 long duration = 3L;
                 if (args.length >= 3) {
-                    Long parsedDuration = parsePositiveLongArgument(sender, args[2], "длительность");
+                    Long parsedDuration = parsePositiveLongArgument(sender, args[2]);
                     if (parsedDuration == null) return true;
                     duration = parsedDuration;
                 }
                 manager.setTeleportSmooth(teleportSmooth, duration);
-                sender.sendMessage("Плавная телепортация: " + teleportSmooth);
+                sender.sendMessage(messages.get("teleport-smooth", teleportSmooth));
                 break;
 
             case "spectatemode":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman spectatemode <true|false|RANDOM> [perspective]");
+                    sender.sendMessage(messages.get("usage-spectate-mode"));
                     return true;
                 }
                 String spectateArg = args[1];
                 if (!isValidSpectateMode(spectateArg)) {
-                    sender.sendMessage("Режим должен быть true, false или RANDOM.");
+                    sender.sendMessage(messages.get("invalid-spectate-state"));
                     return true;
                 }
                 SpectatePerspective playerPerspective = null;
@@ -364,18 +366,19 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 if (playerPerspective != null) {
                     manager.setSpectatePerspective(playerPerspective);
                 }
-                sender.sendMessage("Режим наблюдения (игроки): " + spectateArg
-                        + (playerPerspective == null ? "" : " (ракурс: " + playerPerspective + ")"));
+                sender.sendMessage(playerPerspective == null
+                        ? messages.get("spectate-player-state", spectateArg)
+                        : messages.get("spectate-player-state-perspective", spectateArg, playerPerspective));
                 break;
 
             case "mobspectatemode":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman mobspectatemode <true|false|RANDOM> [perspective]");
+                    sender.sendMessage(messages.get("usage-mob-spectate-mode"));
                     return true;
                 }
                 String mobSpectateArg = args[1];
                 if (!isValidSpectateMode(mobSpectateArg)) {
-                    sender.sendMessage("Режим должен быть true, false или RANDOM.");
+                    sender.sendMessage(messages.get("invalid-spectate-state"));
                     return true;
                 }
                 SpectatePerspective mobPerspective = null;
@@ -387,120 +390,121 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 if (mobPerspective != null) {
                     manager.setMobSpectatePerspective(mobPerspective);
                 }
-                sender.sendMessage("Режим наблюдения (мобы): " + mobSpectateArg
-                        + (mobPerspective == null ? "" : " (ракурс: " + mobPerspective + ")"));
+                sender.sendMessage(mobPerspective == null
+                        ? messages.get("spectate-mob-state", mobSpectateArg)
+                        : messages.get("spectate-mob-state-perspective", mobSpectateArg, mobPerspective));
                 break;
 
             case "mobnightvision":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman mobnightvision <true/false>");
+                    sender.sendMessage(messages.get("usage-mob-night-vision"));
                     return true;
                 }
                 Boolean mobNightVisionArg = parseBooleanArgument(sender, args[1]);
                 if (mobNightVisionArg == null) return true;
                 boolean mobNightVision = mobNightVisionArg;
                 manager.setMobNightVision(mobNightVision);
-                sender.sendMessage("Ночное зрение для мобов: " + mobNightVision);
+                sender.sendMessage(messages.get("mob-night-vision", mobNightVision));
                 break;
             case "showmessage":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman showmessage <true/false>");
+                    sender.sendMessage(messages.get("usage-show-message"));
                     return true;
                 }
                 Boolean showMessageArg = parseBooleanArgument(sender, args[1]);
                 if (showMessageArg == null) return true;
                 boolean showMessage = showMessageArg;
                 manager.setShowMessage(showMessage);
-                sender.sendMessage("Показывать сообщения: " + showMessage);
+                sender.sendMessage(messages.get("show-message", showMessage));
                 break;
             case "nightvisionthreshold":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman nightvisionthreshold <0-15>");
+                    sender.sendMessage(messages.get("usage-night-vision-threshold"));
                     return true;
                 }
                 try {
                     int threshold = Integer.parseInt(args[1]);
                     if (threshold < 0 || threshold > 15) {
-                        sender.sendMessage("Порог должен быть от 0 до 15.");
+                        sender.sendMessage(messages.get("threshold-invalid"));
                         return true;
                     }
                     manager.setNightVisionThreshold(threshold);
-                    sender.sendMessage("Порог ночного зрения: " + threshold);
+                    sender.sendMessage(messages.get("threshold-set", threshold));
                 } catch (NumberFormatException e) {
-                    sender.sendMessage("Неверный формат числа.");
+                    sender.sendMessage(messages.get("invalid-number"));
                 }
                 break;
 
             case "distance":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman distance <value|min-max>");
+                    sender.sendMessage(messages.get("usage-distance"));
                     return true;
                 }
                 String distance = args[1];
                 // Optional: Validate format here, but manager handles parsing safely
                 if (!isFiniteNumberOrRange(distance)) {
-                    sender.sendMessage("Неверный формат. Укажите конечное число или диапазон чисел (например, 3.0-6.0).");
+                    sender.sendMessage(messages.get("invalid-range", "3.0-6.0"));
                     return true;
                 }
                 manager.setSpectateDistance(distance);
-                sender.sendMessage("Расстояние камеры: " + distance);
+                sender.sendMessage(messages.get("distance-value", distance));
                 break;
 
             case "height":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman height <value|min-max>");
+                    sender.sendMessage(messages.get("usage-height"));
                     return true;
                 }
                 String height = args[1];
                 if (!isFiniteNumberOrRange(height)) {
-                    sender.sendMessage("Неверный формат. Укажите конечное число или диапазон чисел (например, 1.0-3.0).");
+                    sender.sendMessage(messages.get("invalid-range", "1.0-3.0"));
                     return true;
                 }
                 manager.setSpectateHeight(height);
-                sender.sendMessage("Высота камеры: " + height);
+                sender.sendMessage(messages.get("height-value", height));
                 break;
 
             case "orbitspeed":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman orbitspeed <value|min-max>");
+                    sender.sendMessage(messages.get("usage-orbit-speed"));
                     return true;
                 }
                 String speed = args[1];
                 if (!isFiniteNumberOrRange(speed)) {
-                    sender.sendMessage("Неверный формат. Укажите конечное число или диапазон чисел (например, 0.5-2.0).");
+                    sender.sendMessage(messages.get("invalid-range", "0.5-2.0"));
                     return true;
                 }
                 manager.setOrbitSpeed(speed);
-                sender.sendMessage("Скорость вращения установлена: " + speed);
+                sender.sendMessage(messages.get("orbit-speed-value", speed));
                 break;
 
             case "orbitdirection":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman orbitdirection <LEFT|RIGHT|RANDOM>");
+                    sender.sendMessage(messages.get("usage-orbit-direction"));
                     return true;
                 }
                 String direction = args[1].toUpperCase(Locale.ROOT);
                 if (direction.equals("LEFT") || direction.equals("RIGHT") || direction.equals("RANDOM")) {
                     manager.setOrbitDirection(direction);
-                    sender.sendMessage("Направление вращения установлено: " + direction);
+                    sender.sendMessage(messages.get("orbit-direction-value", direction));
                 } else {
-                    sender.sendMessage("Неверное направление. Используйте LEFT, RIGHT или RANDOM.");
+                    sender.sendMessage(messages.get("invalid-orbit-direction"));
                 }
                 break;
 
             case "smoothness":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman smoothness <value>");
+                    sender.sendMessage(messages.get("usage-smoothness"));
                     return true;
                 }
                 try {
                     double smoothness = Double.parseDouble(args[1]);
                     if (!Double.isFinite(smoothness) || smoothness < 0.01 || smoothness > 1.0) {
-                        sender.sendMessage("Плавность должна быть числом от 0.01 до 1.0.");
+                        sender.sendMessage(messages.get("smoothness-range"));
                         return true;
                     }
                 } catch (NumberFormatException e) {
-                    sender.sendMessage("Неверный формат плавности. Укажите число от 0.01 до 1.0.");
+                    sender.sendMessage(messages.get("invalid-smoothness"));
                     return true;
                 }
                 manager.setDynamicSmoothness(args[1]);
@@ -508,11 +512,11 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
 
             case "flybyduration":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman flybyduration <value> (секунды)");
+                    sender.sendMessage(messages.get("usage-flyby-duration"));
                     return true;
                 }
                 if (!isPositiveFiniteNumber(args[1])) {
-                    sender.sendMessage("Параметр «длительность пролёта» должен быть конечным числом больше нуля.");
+                    sender.sendMessage(messages.get("invalid-flyby-duration"));
                     return true;
                 }
                 manager.setFlybyDuration(args[1]);
@@ -520,11 +524,11 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
 
             case "craneduration":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman craneduration <value> (секунды)");
+                    sender.sendMessage(messages.get("usage-crane-duration"));
                     return true;
                 }
                 if (!isPositiveFiniteNumber(args[1])) {
-                    sender.sendMessage("Параметр «длительность крана» должен быть конечным числом больше нуля.");
+                    sender.sendMessage(messages.get("invalid-crane-duration"));
                     return true;
                 }
                 manager.setCraneDuration(args[1]);
@@ -532,12 +536,12 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
 
             case "random":
                 if (args.length < 3) {
-                    sender.sendMessage("Использование: /cameraman random <player|mob> <mode1,mode2...>");
+                    sender.sendMessage(messages.get("usage-random"));
                     return true;
                 }
                 String type = args[1].toLowerCase(Locale.ROOT);
                 if (!type.equals("player") && !type.equals("mob") && !type.equals("scenic")) {
-                    sender.sendMessage("Неверный тип. Использование: /cameraman random <player|mob|scenic> ...");
+                    sender.sendMessage(messages.get("invalid-random-type"));
                     return true;
                 }
 
@@ -547,12 +551,12 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     try {
                         SpectatePerspective perspective = SpectatePerspective.valueOf(mode.trim().toUpperCase(Locale.ROOT));
                         if (perspective == SpectatePerspective.RANDOM) {
-                            sender.sendMessage("Режим RANDOM нельзя включать в список случайных ракурсов.");
+                            sender.sendMessage(messages.get("random-value-not-allowed"));
                             return true;
                         }
                         validModes.add(perspective.name());
                     } catch (IllegalArgumentException e) {
-                        sender.sendMessage("Неизвестный или пустой ракурс: '" + mode + "'. Список не изменён.");
+                        sender.sendMessage(messages.get("random-perspective-invalid", mode));
                         return true;
                     }
                 }
@@ -561,7 +565,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
 
             case "scenic":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman scenic <true|false> [perspective]");
+                    sender.sendMessage(messages.get("usage-scenic"));
                     return true;
                 }
                 Boolean scenicEnableArg = parseBooleanArgument(sender, args[1]);
@@ -576,27 +580,27 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     if (sender instanceof Player) {
                         Player p = (Player) sender;
                         manager.startScenicTask(p.getLocation(), perspective);
-                        sender.sendMessage("Пейзажный режим включён: " + perspective + " на вашей позиции.");
+                        sender.sendMessage(messages.get("scenic-enabled-player", perspective));
                     } else {
                         // If console, use the cameraman's current location
                         Player cameraman = manager.getCameraman();
                         if (cameraman != null) {
                             manager.startScenicTask(cameraman.getLocation(), perspective);
-                            sender.sendMessage("Пейзажный режим включён: " + perspective + " на позиции оператора.");
+                            sender.sendMessage(messages.get("scenic-enabled-cameraman", perspective));
                         } else {
                             sender.sendMessage(
-                                    "No cameraman set. Cannot start Scenic Mode from console without a cameraman.");
+                                    messages.get("scenic-console-no-cameraman"));
                         }
                     }
                 } else {
                     manager.stopFollowing();
-                    sender.sendMessage("Пейзажный режим отключён.");
+                    sender.sendMessage(messages.get("scenic-disabled"));
                 }
                 break;
 
             case "autoscenic":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman autoscenic <true|false> [perspective]");
+                    sender.sendMessage(messages.get("usage-autoscenic"));
                     return true;
                 }
                 Boolean autoScenicArg = parseBooleanArgument(sender, args[1]);
@@ -612,11 +616,11 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
 
             case "movespeed":
                 if (args.length < 2) {
-                    sender.sendMessage("Использование: /cameraman movespeed <value|min-max>");
+                    sender.sendMessage(messages.get("usage-move-speed"));
                     return true;
                 }
                 if (!isFiniteNumberOrRange(args[1])) {
-                    sender.sendMessage("Неверный формат скорости. Укажите конечное число или диапазон чисел.");
+                    sender.sendMessage(messages.get("invalid-move-speed"));
                     return true;
                 }
                 manager.setMoveSpeed(args[1]);
@@ -624,19 +628,19 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
 
             case "movedirection":
                 if (args.length < 4) {
-                    sender.sendMessage("Использование: /cameraman movedirection <x> <y> <z> (поддерживаются диапазоны, например -1-1)");
+                    sender.sendMessage(messages.get("usage-move-direction"));
                     return true;
                 }
                 if (!isFiniteNumberOrRange(args[1]) || !isFiniteNumberOrRange(args[2])
                         || !isFiniteNumberOrRange(args[3])) {
-                    sender.sendMessage("Координаты направления должны быть конечными числами или диапазонами чисел.");
+                    sender.sendMessage(messages.get("invalid-move-vector"));
                     return true;
                 }
                 manager.setMoveDirection(args[1], args[2], args[3]);
                 break;
 
             default:
-                sender.sendMessage("Неизвестная подкоманда.");
+                sender.sendMessage(messages.get("unknown-subcommand"));
                 break;
         }
 
