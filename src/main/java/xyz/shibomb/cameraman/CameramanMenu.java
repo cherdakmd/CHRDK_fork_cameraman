@@ -19,16 +19,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class CameramanMenu implements Listener {
 
-    private final CameramanManager manager;
     private final NamespacedKey targetKey;
 
-    public CameramanMenu(JavaPlugin plugin, CameramanManager manager) {
-        this.manager = manager;
+    public CameramanMenu(JavaPlugin plugin) {
         this.targetKey = new NamespacedKey(plugin, "camera-target");
     }
 
-    public void open(Player viewer) {
-        MenuHolder holder = new MenuHolder();
+    public void open(Player viewer, CameramanManager manager) {
+        MenuHolder holder = new MenuHolder(manager);
         Inventory inventory = Bukkit.createInventory(holder, 54,
                 manager.getMessages().get("menu-title"));
         holder.setInventory(inventory);
@@ -56,9 +54,10 @@ public final class CameramanMenu implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getView().getTopInventory().getHolder() instanceof MenuHolder)) {
+        if (!(event.getView().getTopInventory().getHolder() instanceof MenuHolder holder)) {
             return;
         }
+        CameramanManager manager = holder.manager;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player viewer)
                 || event.getClickedInventory() != event.getView().getTopInventory()) {
@@ -98,7 +97,12 @@ public final class CameramanMenu implements Listener {
     }
 
     private static final class MenuHolder implements InventoryHolder {
+        private final CameramanManager manager;
         private Inventory inventory;
+
+        MenuHolder(CameramanManager manager) {
+            this.manager = manager;
+        }
 
         void setInventory(Inventory inventory) {
             this.inventory = inventory;

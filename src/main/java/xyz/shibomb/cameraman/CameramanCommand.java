@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -16,12 +17,14 @@ import org.jetbrains.annotations.NotNull;
 
 public class CameramanCommand implements CommandExecutor, TabCompleter {
 
-    private final CameramanManager manager;
-    private final Messages messages;
+    private CameramanManager manager;
+    private Messages messages;
+    private final OperatorRegistry operators;
     private final CameramanMenu menu;
 
-    public CameramanCommand(CameramanManager manager, CameramanMenu menu) {
-        this.manager = manager;
+    public CameramanCommand(OperatorRegistry operators, CameramanMenu menu) {
+        this.operators = operators;
+        this.manager = operators.getPrimaryManager();
         this.messages = manager.getMessages();
         this.menu = menu;
     }
@@ -57,7 +60,8 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
             Map.entry("скоростьдвижения", "movespeed"),
             Map.entry("направлениедвижения", "movedirection"),
             Map.entry("меню", "menu"),
-            Map.entry("профиль", "profile"));
+            Map.entry("профиль", "profile"),
+            Map.entry("операторы", "operators"));
 
     private static String normalizeSubCommand(String input) {
         String normalized = input.toLowerCase(Locale.ROOT);
@@ -65,8 +69,10 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
     }
 
     @Override
-    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias,
+    public synchronized List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias,
             @NotNull String[] args) {
+        this.manager = operators.getManagerFor(sender);
+        this.messages = manager.getMessages();
         if (!command.testPermissionSilent(sender)) {
             return List.of();
         }
@@ -78,7 +84,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     "mobnightvision", "showmessage", "nightvisionthreshold", "distance", "height",
                     "orbitspeed", "orbitdirection", "smoothness", "flybyduration", "craneduration",
                     "craneheightmin", "craneheightmax", "random", "scenic", "autoscenic", "movespeed",
-                    "movedirection", "menu", "profile"));
+                    "movedirection", "menu", "profile", "operators"));
             subcommands.addAll(RUSSIAN_SUBCOMMANDS.keySet());
             return matching(subcommands, args[0]);
         }
@@ -93,6 +99,9 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
 
         if (subcommand.equals("profile") && argumentIndex == 1) {
             return matching(List.of("save", "load", "delete", "list"), current);
+        }
+        if (subcommand.equals("unset") && argumentIndex == 1) {
+            return matching(operators.getOperatorNames(), current);
         }
         if (subcommand.equals("profile") && argumentIndex == 2 && args.length >= 2
                 && (args[1].equalsIgnoreCase("load") || args[1].equalsIgnoreCase("delete"))) {
@@ -188,8 +197,10 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
     }
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label,
+    public synchronized boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label,
             @NotNull String[] args) {
+        this.manager = operators.getManagerFor(sender);
+        this.messages = manager.getMessages();
         if (args.length == 0) {
             return false;
         }
@@ -199,7 +210,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         switch (subCommand) {
             case "menu":
                 if (sender instanceof Player player) {
-                    menu.open(player);
+                    menu.open(player, manager);
                 } else {
                     sender.sendMessage(messages.get("menu-player-only"));
                 }
@@ -247,13 +258,40 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(messages.get("player-not-found"));
                     return true;
                 }
-                manager.setCameraman(player);
-                sender.sendMessage(messages.get("cameraman-set", player.getName()));
+                operators.addOperator(player);
+                sender.sendMessage(messages.get("operator-added", player.getName()));
                 break;
 
             case "unset":
-                manager.removeCameraman();
-                sender.sendMessage(messages.get("cameraman-unset"));
+                UUID operatorId = null;
+                if (args.length >= 2) {
+                    try {
+                        operatorId = UUID.fromString(args[1]);
+                    } catch (IllegalArgumentException ignored) {
+                        Player operatorPlayer = Bukkit.getPlayer(args[1]);
+                        if (operatorPlayer == null) {
+                            sender.sendMessage(messages.get("player-not-found"));
+                            return true;
+                        }
+                        operatorId = operatorPlayer.getUniqueId();
+                    }
+                } else if (sender instanceof Player playerSender && operators.isOperator(playerSender.getUniqueId())) {
+                    operatorId = playerSender.getUniqueId();
+                } else {
+                    operatorId = operators.getPrimaryOperatorId();
+                }
+                if (operatorId == null || !operators.removeOperator(operatorId)) {
+                    sender.sendMessage(messages.get("no-operators"));
+                } else {
+                    sender.sendMessage(messages.get("operator-removed"));
+                }
+                break;
+
+            case "operators":
+                List<String> operatorNames = operators.getOperatorNames();
+                sender.sendMessage(operatorNames.isEmpty()
+                        ? messages.get("no-operators")
+                        : messages.get("operators-list", String.join(", ", operatorNames)));
                 break;
 
             case "target":

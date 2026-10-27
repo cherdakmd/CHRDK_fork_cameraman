@@ -121,6 +121,10 @@ ru:
   profile-deleted: "Профиль «%s» удалён."
   profile-not-found: "Профиль «%s» не найден."
   profile-invalid-name: "Имя профиля: 1–32 символа, только латиница, цифры, дефис и подчёркивание."
+  operator-added: "Добавлен оператор камеры: %s"
+  operator-removed: "Оператор камеры снят."
+  no-operators: "Операторы камеры не назначены."
+  operators-list: "Операторы камеры: %s"
 en:
   usage-set: "Usage: /cameraman set <player>"
   usage-target: "Usage: /cameraman target <player>"
@@ -244,3 +248,7 @@ en:
   profile-deleted: "Profile '%s' deleted."
   profile-not-found: "Profile '%s' was not found."
   profile-invalid-name: "Profile names must be 1–32 characters using letters, digits, hyphens, or underscores."
+  operator-added: "Camera operator added: %s"
+  operator-removed: "Camera operator removed."
+  no-operators: "No camera operators are assigned."
+  operators-list: "Camera operators: %s"
