@@ -4,8 +4,9 @@ main: xyz.shibomb.cameraman.CameramanPlugin
 api-version: '1.21.11'
 commands:
   cameraman:
+    aliases: [камера]
     description: Управление кинематографичной камерой
-    usage: '/<command> [set|unset|clear|teleportsmooth|showmessage|target|newcomer|rotation|minrotationdistance|spectatemode|mobtarget|automob|mobspectatemode|mobnightvision|nightvisionthreshold|distance|height|orbitspeed|orbitdirection|smoothness|flybyduration|craneduration|craneheightmin|craneheightmax|movedirection|movespeed|random|scenic|autoscenic] (Available perspectives: POV, BEHIND, FRONT, RANDOM, ORBIT, DYNAMIC, DYNAMIC_BEHIND, DYNAMIC_FRONT, DYNAMIC_POV, FLYBY, CRANE, FIX)'
+    usage: '/<command> <подкоманда> [аргументы]'
     permission: cameraman.use
 permissions:
   cameraman.use:

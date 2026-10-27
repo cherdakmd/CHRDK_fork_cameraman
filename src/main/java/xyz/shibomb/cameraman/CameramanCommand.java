@@ -2,6 +2,8 @@ package xyz.shibomb.cameraman;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -18,6 +20,42 @@ public class CameramanCommand implements CommandExecutor {
         this.manager = manager;
     }
 
+    private static final Map<String, String> RUSSIAN_SUBCOMMANDS = Map.ofEntries(
+            Map.entry("назначить", "set"),
+            Map.entry("снять", "unset"),
+            Map.entry("цель", "target"),
+            Map.entry("сбросить", "clear"),
+            Map.entry("новички", "newcomer"),
+            Map.entry("ротация", "rotation"),
+            Map.entry("минрасстояние", "minrotationdistance"),
+            Map.entry("мобцель", "mobtarget"),
+            Map.entry("автомобы", "automob"),
+            Map.entry("плавныйтелепорт", "teleportsmooth"),
+            Map.entry("наблюдение", "spectatemode"),
+            Map.entry("наблюдениемобов", "mobspectatemode"),
+            Map.entry("ночноезрениемобов", "mobnightvision"),
+            Map.entry("сообщения", "showmessage"),
+            Map.entry("порогночногозрения", "nightvisionthreshold"),
+            Map.entry("дистанция", "distance"),
+            Map.entry("высота", "height"),
+            Map.entry("скоростьорбиты", "orbitspeed"),
+            Map.entry("направлениеорбиты", "orbitdirection"),
+            Map.entry("плавность", "smoothness"),
+            Map.entry("длительностьпролёта", "flybyduration"),
+            Map.entry("длительностькрана", "craneduration"),
+            Map.entry("минвысотакрана", "craneheightmin"),
+            Map.entry("максвысотакрана", "craneheightmax"),
+            Map.entry("случайныйракурс", "random"),
+            Map.entry("пейзаж", "scenic"),
+            Map.entry("автопейзаж", "autoscenic"),
+            Map.entry("скоростьдвижения", "movespeed"),
+            Map.entry("направлениедвижения", "movedirection"));
+
+    private static String normalizeSubCommand(String input) {
+        String normalized = input.toLowerCase(Locale.ROOT);
+        return RUSSIAN_SUBCOMMANDS.getOrDefault(normalized, normalized);
+    }
+
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label,
             @NotNull String[] args) {
@@ -25,7 +63,7 @@ public class CameramanCommand implements CommandExecutor {
             return false;
         }
 
-        String subCommand = args[0].toLowerCase();
+        String subCommand = normalizeSubCommand(args[0]);
 
         switch (subCommand) {
             case "set":
