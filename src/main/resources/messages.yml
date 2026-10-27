@@ -124,6 +124,7 @@ ru:
   operator-added: "Добавлен оператор камеры: %s"
   operator-removed: "Оператор камеры снят."
   no-operators: "Операторы камеры не назначены."
+  not-camera-operator: "Вы не назначены оператором камеры. Укажите имя оператора для снятия."
   operators-list: "Операторы камеры: %s"
 en:
   usage-set: "Usage: /cameraman set <player>"
@@ -251,4 +252,5 @@ en:
   operator-added: "Camera operator added: %s"
   operator-removed: "Camera operator removed."
   no-operators: "No camera operators are assigned."
+  not-camera-operator: "You are not assigned as a camera operator. Specify an operator to remove."
   operators-list: "Camera operators: %s"

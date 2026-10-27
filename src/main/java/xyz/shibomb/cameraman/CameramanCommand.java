@@ -275,7 +275,11 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                         }
                         operatorId = operatorPlayer.getUniqueId();
                     }
-                } else if (sender instanceof Player playerSender && operators.isOperator(playerSender.getUniqueId())) {
+                } else if (sender instanceof Player playerSender) {
+                    if (!operators.isOperator(playerSender.getUniqueId())) {
+                        sender.sendMessage(messages.get("not-camera-operator"));
+                        return true;
+                    }
                     operatorId = playerSender.getUniqueId();
                 } else {
                     operatorId = operators.getPrimaryOperatorId();
