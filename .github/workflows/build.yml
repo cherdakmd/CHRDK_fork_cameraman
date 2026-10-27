@@ -10,6 +10,12 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        paper-api-version:
+          - 1.21.11-R0.1-SNAPSHOT
+          - 26.3.build.218-stable
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -19,5 +25,5 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-      - name: Build plugin
-        run: mvn --batch-mode --no-transfer-progress clean package
+      - name: Compile against Paper API ${{ matrix.paper-api-version }}
+        run: mvn --batch-mode --no-transfer-progress clean package -Dpaper-api.version=${{ matrix.paper-api-version }}
