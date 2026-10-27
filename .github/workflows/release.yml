@@ -18,14 +18,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
-      - name: Set up Java 17 and Maven cache
-        uses: actions/setup-java@v4
+      - name: Set up Java 25 and Maven cache
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
           cache: maven
       - name: Build plugin
         run: mvn --batch-mode --no-transfer-progress clean package
@@ -33,4 +33,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
-        run: gh release upload "$RELEASE_TAG" target/cameraman-26.3.jar --clobber
+        run: |
+          JAR_PATH="$(find target -maxdepth 1 -type f -name 'cameraman-*.jar' ! -name '*original*' -print -quit)"
+          test -n "$JAR_PATH"
+          gh release upload "$RELEASE_TAG" "$JAR_PATH" --clobber

@@ -1,34 +1,33 @@
-# Cinematic Cameraman - Project Overview
+# Кинематографичная камера — обзор проекта
 
-## 1. Description
+## 1. Описание
 
-A Minecraft Paper plugin (`whole-minecraft-cameraman`) that allows a designated player to act as a "Cinematic Cameraman", automatically spectating players and entities with various cinematic camera perspectives.
+Плагин для Minecraft Paper (`whole-minecraft-cameraman`), позволяющий назначенному игроку выступать оператором камеры и автоматически наблюдать за игроками и существами с разных кинематографичных ракурсов.
 
-## 2. Goals
+## 2. Цели
 
-- Provide hands-off, cinematic viewing of a Minecraft server.
-- Feature various intelligent targeting modes (players, mobs, locations).
-- Offer extensive and smooth camera perspectives (orbit, flyby, dynamic, crane, etc.).
-- Ensure persistence of settings across server restarts.
+- Обеспечить автоматизированную кинематографичную съёмку на сервере Minecraft.
+- Предоставить интеллектуальные режимы выбора целей: игроки, мобы и позиции.
+- Предложить разнообразные плавные ракурсы камеры: вращение, пролёт, слежение, кран и другие.
+- Сохранять настройки после перезапуска сервера.
 
-## 3. Technology Stack
+## 3. Технологический стек
 
-- **Platform**: Minecraft Paper API (`1.20`)
-- **Language**: Java
-- **Build Tool**: Maven
+- **Платформа**: Minecraft Paper API (`1.21.11` как базовая версия; CI также проверяет `26.3`)
+- **Байткод плагина**: Java 21; Paper 26.3 требует Java 25 для запуска сервера
+- **Язык**: Java
+- **Система сборки**: Maven
 
-## 4. Architecture Principles for AI-DD
+## 4. Принципы архитектуры и разработки по спецификациям
 
-To maintain and extend this plugin using AI Spec-Driven Development:
+1. **Сначала спецификация**: до реализации новой функции или изменения опишите его в каталоге `docs/specs/`.
+2. **Единый источник правды**: `config.yml` задаёт значения по умолчанию, а `docs/specs/` описывает ожидаемое поведение.
+3. **Без несанкционированного изменения состояния**: постоянные данные (например, UUID оператора и режимы) должны надёжно сохраняться после перезапуска.
+4. **Модульность**: ракурсы камеры изолированы друг от друга; новые варианты должны добавляться отдельными реализациями `Shot`.
 
-1. **Spec First**: Any new feature or modification must first be documented in the `docs/specs/` directory before implementation.
-2. **Single Source of Truth**: The `config.yml` provides the default values, while `docs/specs/` explains the intended behavior.
-3. **No Unapproved State Changes**: Persistent states (like Cameraman UUID, modes) must be managed carefully and robustly to survive server restarts.
-4. **Modularity**: Camera perspectives are isolated behaviors and should be easily extensible by adding new `Shot` implementations.
+## 5. Структура спецификаций
 
-## 5. Specification Structure
-
-- `features/01_cameraman_core.md`: Core mechanics, assignment, and persistence.
-- `features/02_targeting_system.md`: Logic for selecting targets (Newcomer, Rotation, Mob).
-- `features/03_spectate_perspectives.md`: Camera behavior and positioning rules.
-- `features/04_scenic_mode.md`: Targetless cinematic viewpoints.
+- `features/01_cameraman_core.md`: основные механики, назначение оператора и сохранение данных.
+- `features/02_targeting_system.md`: выбор целей (новички, ротация, мобы).
+- `features/03_spectate_perspectives.md`: поведение камеры и правила позиционирования.
+- `features/04_scenic_mode.md`: кинематографичные съёмки без цели.

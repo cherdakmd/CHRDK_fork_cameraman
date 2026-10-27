@@ -4,30 +4,33 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class CameramanPlugin extends JavaPlugin {
 
-    private CameramanManager cameramanManager;
+    private OperatorRegistry operators;
 
     @Override
     public void onEnable() {
-        // Plugin startup logic
         saveDefaultConfig();
         getLogger().info("Cameraman plugin has been enabled!");
 
-        this.cameramanManager = new CameramanManager(this);
-        
-        getCommand("cameraman").setExecutor(new CameramanCommand(this.cameramanManager));
-        getServer().getPluginManager().registerEvents(new PlayerJoinListener(this.cameramanManager), this);
+        this.operators = new OperatorRegistry(this);
+        CameramanMenu menu = new CameramanMenu(this);
+        CameramanCommand cameramanCommand = new CameramanCommand(this.operators, menu);
+        getCommand("cameraman").setExecutor(cameramanCommand);
+        getCommand("cameraman").setTabCompleter(cameramanCommand);
+        getServer().getPluginManager().registerEvents(new PlayerJoinListener(this.operators), this);
+        getServer().getPluginManager().registerEvents(menu, this);
     }
 
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
-        if (this.cameramanManager != null) {
-            this.cameramanManager.stopRotationTask();
-        }
+        if (operators != null) operators.stopAllTasks();
         getLogger().info("Cameraman plugin has been disabled!");
     }
 
+    public OperatorRegistry getOperatorRegistry() {
+        return operators;
+    }
+
     public CameramanManager getCameramanManager() {
-        return cameramanManager;
+        return operators.getPrimaryManager();
     }
 }

@@ -1,25 +1,25 @@
-# Feature Specification: Scenic Mode
+# Спецификация: пейзажный режим
 
-## 1. Summary
+## 1. Краткое описание
 
-Scenic Mode allows for "Targetless" cinematic shots where the camera moves independently based on a static anchor point in the world instead of following an entity.
+Пейзажный режим создаёт кинематографичную съёмку без цели: камера движется относительно неподвижной опорной точки в мире, а не следует за существом.
 
-## 2. Mechanics
+## 2. Механики
 
-### 2.1 Manual Scenic Mode
+### 2.1 Ручной пейзажный режим
 
-- **Command**: `/cameraman scenic <true|false> [perspective]`
-- When enabled, the Cameraman initiates a cinematic shot using their _current physical location_ as the anchor point.
-- Usable perspectives typically include: `ORBIT`, `FLYBY`, `CRANE`, `MOVE`, and `FIX`.
+- **Команда**: `/cameraman scenic <true|false> [perspective]`
+- При включении камера использует текущее физическое положение оператора как опорную точку.
+- Обычно доступны ракурсы: `ORBIT`, `FLYBY`, `CRANE`, `MOVE` и `FIX`.
 
-### 2.2 Auto Scenic
+### 2.2 Автоматический пейзажный режим
 
-- **Command**: `/cameraman autoscenic <true|false> [perspective]`
-- **Behavior**: An automatic fallback sequence.
-- **Trigger**: Activates if a new target is found but `spectateMode` is `false`.
-- **Result**: The Cameraman teleports to the target but immediately switches into Scenic Mode anchored around that location instead of locking onto the entity.
+- **Команда**: `/cameraman autoscenic <true|false> [perspective]`
+- **Назначение**: автоматический резервный сценарий.
+- **Условие запуска**: найдена новая цель, но `spectateMode` отключён.
+- **Результат**: оператор перемещается к цели, после чего камера запускает пейзажную съёмку вокруг этой позиции, а не фиксируется на существе.
 
-## 3. Interaction with Randomization
+## 3. Случайный выбор ракурса
 
-- Scenic Mode perspectives can be randomized using the `RANDOM` perspective type.
-- The list of allowed perspectives is defined in the configuration array `randomScenicPerspectives` (e.g., ORBIT, FLYBY, MOVE, CRANE, FIX).
+- Для пейзажного режима можно включить случайный выбор через ракурс `RANDOM`.
+- Список вариантов задаётся в конфигурации `randomScenicPerspectives` (например, `ORBIT`, `FLYBY`, `MOVE`, `CRANE`, `FIX`).

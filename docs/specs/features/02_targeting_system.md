@@ -1,38 +1,38 @@
-# Feature Specification: Targeting System
+# Спецификация: система выбора целей
 
-## 1. Summary
+## 1. Краткое описание
 
-The Targeting System dictates who or what the Cameraman should spectate at any given moment. It operates through various modes that can interact or fall back onto each other.
+Система выбора целей определяет, за кем или чем наблюдает оператор камеры. Режимы могут взаимодействовать друг с другом и использовать резервные варианты.
 
-## 2. Targeting Modes
+## 2. Режимы выбора целей
 
-### 2.1 Manual Target
+### 2.1 Ручной выбор цели
 
-- **Command**: `/cameraman target <player|mob>`
-- Forces the Cameraman to spectate a specific target immediately.
+- **Команда**: `/cameraman target <player|mob>`
+- Немедленно переключает камеру на указанную цель.
 
-### 2.2 Newcomer Mode
+### 2.2 Режим новичков
 
-- **Command**: `/cameraman newcomer <true|false>`
-- **Behavior**: Automatically forces the Cameraman to spectate a player the moment they join the server.
+- **Команда**: `/cameraman newcomer <true|false>`
+- **Поведение**: автоматически переключает камеру на игрока сразу после его входа на сервер.
 
-### 2.3 Rotation Mode
+### 2.3 Режим ротации
 
-- **Command**: `/cameraman rotation <true|false> [interval]`
-- **Behavior**: Automatically cycles the spectated target among available online players.
-- **Interval**: Time in seconds between switches (Default: 60s).
-- **Condition**: Uses `/cameraman minrotationdistance <distance>` to avoid rotating to a target that is too close to the current location (Default: 5.0 blocks).
+- **Команда**: `/cameraman rotation <true|false> [interval]`
+- **Поведение**: автоматически переключает наблюдение между доступными игроками онлайн.
+- **Интервал**: время между переключениями в секундах (по умолчанию 60 секунд).
+- **Ограничение**: команда `/cameraman minrotationdistance <distance>` задаёт минимальное расстояние до следующей цели (по умолчанию 5 блоков).
 
-### 2.4 Mob Target Mode
+### 2.4 Режим выбора мобов
 
-- **Command**: `/cameraman mobtarget <true|false>`
-- **Behavior**: When enabled, the plugin will target living entities (mobs) instead of players during rotation and target selection.
+- **Команда**: `/cameraman mobtarget <true|false>`
+- **Поведение**: при включении во время ротации и выборе цели плагин выбирает живых существ (мобов) вместо игроков.
 
-### 2.5 Auto Mob Target
+### 2.5 Автоматический выбор мобов
 
-- **Command**: `/cameraman automob <true|false> [delay]`
-- **Behavior**: Acts as a fallback mechanism. If no players are available online to spectate, after the designated delay (Default: 60s), the plugin automatically switches to `Mob Target Mode`.
+- **Команда**: `/cameraman automob <true|false> [delay]`
+- **Поведение**: резервный режим. Если в сети нет игроков, за которыми можно наблюдать, по истечении заданной задержки (по умолчанию 60 секунд) плагин автоматически включает выбор мобов.
 
-## 3. Related Systems
+## 3. Связанные системы
 
-This logic works in conjunction with the **Spectate Perspectives** (which dictate _how_ the target is viewed) and **Scenic Mode** (which occurs when no valid entities are available or desired).
+Система работает совместно с **ракурсами наблюдения**, определяющими способ съёмки цели, и **пейзажным режимом**, используемым, когда подходящих существ нет или съёмка без цели предпочтительна.

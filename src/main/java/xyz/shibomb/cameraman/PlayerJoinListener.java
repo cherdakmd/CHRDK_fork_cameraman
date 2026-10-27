@@ -1,39 +1,38 @@
 package xyz.shibomb.cameraman;
 
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 
-public class PlayerJoinListener implements Listener {
+public final class PlayerJoinListener implements Listener {
 
-    private final CameramanManager manager;
+    private final OperatorRegistry operators;
 
-    public PlayerJoinListener(CameramanManager manager) {
-        this.manager = manager;
+    public PlayerJoinListener(OperatorRegistry operators) {
+        this.operators = operators;
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        manager.restoreCameraman(event.getPlayer());
-        
-        Player cameraman = manager.getCameraman();
-        if (cameraman != null && cameraman.getUniqueId().equals(event.getPlayer().getUniqueId())) {
-            return; // Don't target self
-        }
+        operators.restoreOperator(event.getPlayer());
+        operators.playerJoined(event.getPlayer());
+    }
 
-        if (manager.isNewcomerMode()) {
-            manager.setTarget(event.getPlayer());
-        } else if (manager.isMobTargetMode()) {
-            // If Newcomer Mode is off, but we are in Mob Target Mode, 
-            // we should probably disable it so RotationTask can pick up the new player.
-            // But only if we want to prioritize players.
-            // Let's disable it to be safe and prioritize players.
-            manager.setMobTargetMode(false);
-            Player cameramanPlayer = manager.getCameraman();
-            if (cameramanPlayer != null) {
-                cameramanPlayer.sendMessage("Режим выбора мобов отключён: подключился игрок.");
-            }
-        }
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        operators.scheduleTargetUnavailable(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        operators.scheduleTargetUnavailable(event.getEntity().getUniqueId());
+    }
+
+    @EventHandler
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        operators.refreshPlayerTarget(event.getPlayer());
     }
 }
