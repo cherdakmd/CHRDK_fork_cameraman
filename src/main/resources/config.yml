@@ -21,6 +21,14 @@ minRotationDistance: 5.0
 # Включён ли режим выбора мобов.
 mobTargetMode: false
 
+# Фильтры целей: пустой список миров означает «любой мир».
+targetFilters:
+  allowedWorlds: []
+  excludedPlayers: []
+  excludedPermissions: []
+  minDistance: 0.0
+  maxDistance: 0.0 # 0 отключает верхнее ограничение
+
 # Включён ли автоматический выбор мобов.
 autoMobTarget: true
 

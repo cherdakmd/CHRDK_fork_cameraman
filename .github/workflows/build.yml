@@ -18,12 +18,12 @@ jobs:
           - 26.3.build.218-stable
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Java 25 and Maven cache
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
           cache: maven
       - name: Compile against Paper API ${{ matrix.paper-api-version }}
-        run: mvn --batch-mode --no-transfer-progress clean package -Dpaper-api.version=${{ matrix.paper-api-version }}
+        run: mvn --batch-mode --no-transfer-progress clean verify -Dpaper-api.version=${{ matrix.paper-api-version }}

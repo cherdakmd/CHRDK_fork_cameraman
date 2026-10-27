@@ -3,7 +3,10 @@ package xyz.shibomb.cameraman;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 
 public class PlayerJoinListener implements Listener {
 
@@ -35,5 +38,20 @@ public class PlayerJoinListener implements Listener {
                 cameramanPlayer.sendMessage(manager.getMessages().get("mob-mode-disabled-join"));
             }
         }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        manager.scheduleTargetUnavailable(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        manager.scheduleTargetUnavailable(event.getEntity().getUniqueId());
+    }
+
+    @EventHandler
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        manager.refreshPlayerTarget(event.getPlayer());
     }
 }

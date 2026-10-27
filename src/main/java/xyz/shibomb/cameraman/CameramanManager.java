@@ -32,6 +32,7 @@ public class CameramanManager {
     private final JavaPlugin plugin;
     private final Messages messages;
     private UUID cameramanId;
+    private UUID currentTargetId;
     private boolean newcomerMode = false;
     private boolean rotationMode = false;
     private RotationTask rotationTask;
@@ -87,6 +88,10 @@ public class CameramanManager {
             }
         }
 
+        loadSettingsFromConfig();
+    }
+
+    private void loadSettingsFromConfig() {
         this.newcomerMode = plugin.getConfig().getBoolean("newcomerMode", false);
         this.rotationMode = plugin.getConfig().getBoolean("rotationMode", false);
         long intervalSeconds = plugin.getConfig().getLong("rotationInterval", 60L);
@@ -253,6 +258,58 @@ public class CameramanManager {
         return messages;
     }
 
+    private static final List<String> PROFILE_SETTINGS = List.of(
+            "newcomerMode", "rotationMode", "rotationInterval", "minRotationDistance", "mobTargetMode",
+            "autoMobTarget", "autoMobTargetDelay", "teleportSmooth", "teleportSmoothDuration",
+            "teleportSmoothSpeed", "spectateMode", "spectatePerspective", "mobSpectateMode",
+            "mobSpectatePerspective", "mobNightVision", "showMessage", "nightVisionThreshold",
+            "spectateDistance", "spectateHeight", "orbitSpeed", "orbitDirection", "dynamicSmoothness",
+            "flybyDuration", "craneDuration", "craneHeightMin", "craneHeightMax", "moveX", "moveY",
+            "moveZ", "moveSpeed", "autoScenic", "autoScenicPerspective", "randomPlayerPerspectives",
+            "randomMobPerspectives", "randomScenicPerspectives");
+
+    private boolean isValidProfileName(String name) {
+        return InputValidators.isValidProfileName(name);
+    }
+
+    public boolean saveProfile(String name) {
+        if (!isValidProfileName(name)) return false;
+        String path = "profiles." + name;
+        for (String setting : PROFILE_SETTINGS) {
+            plugin.getConfig().set(path + "." + setting, plugin.getConfig().get(setting));
+        }
+        plugin.saveConfig();
+        return true;
+    }
+
+    public boolean loadProfile(String name) {
+        if (!isValidProfileName(name) || !plugin.getConfig().isConfigurationSection("profiles." + name)) {
+            return false;
+        }
+        for (String setting : PROFILE_SETTINGS) {
+            if (plugin.getConfig().contains("profiles." + name + "." + setting)) {
+                plugin.getConfig().set(setting, plugin.getConfig().get("profiles." + name + "." + setting));
+            }
+        }
+        plugin.saveConfig();
+        loadSettingsFromConfig();
+        return true;
+    }
+
+    public boolean deleteProfile(String name) {
+        if (!isValidProfileName(name) || !plugin.getConfig().isConfigurationSection("profiles." + name)) {
+            return false;
+        }
+        plugin.getConfig().set("profiles." + name, null);
+        plugin.saveConfig();
+        return true;
+    }
+
+    public List<String> getProfileNames() {
+        org.bukkit.configuration.ConfigurationSection section = plugin.getConfig().getConfigurationSection("profiles");
+        return section == null ? List.of() : new ArrayList<>(section.getKeys(false));
+    }
+
     public void sendInfoMessage(Player player, String message) {
         if (showMessage && player != null) {
             player.sendMessage(message);
@@ -262,6 +319,10 @@ public class CameramanManager {
     public void setTarget(org.bukkit.entity.Entity target) {
         Player cameraman = getCameraman();
         if (cameraman != null && target != null) {
+            if (!isTargetAllowed(target)) {
+                sendInfoMessage(cameraman, messages.get("target-not-allowed"));
+                return;
+            }
             // Clean up previous night vision states first
             stopLightCheckTask();
             stopSpectateTask();
@@ -285,6 +346,7 @@ public class CameramanManager {
                         messages.get("cannot-spectate-not-spectator", target.getName()));
                 return;
             }
+            currentTargetId = target.getUniqueId();
 
             // Stop any existing smooth teleport task
             if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
@@ -410,11 +472,16 @@ public class CameramanManager {
     }
 
     public void clearTarget() {
+        currentTargetId = null;
         Player cameraman = getCameraman();
         if (cameraman != null) {
             cameraman.setSpectatorTarget(null);
             stopLightCheckTask();
             stopSpectateTask();
+            if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
+                currentTeleportTask.cancel();
+                currentTeleportTask = null;
+            }
             removeCameramanNightVision(cameraman);
             sendInfoMessage(cameraman, messages.get("stopped-spectating"));
         }
@@ -531,13 +598,75 @@ public class CameramanManager {
 
     public List<Player> getPotentialTargets() {
         List<Player> targets = new ArrayList<>(Bukkit.getOnlinePlayers());
-        // Remove cameraman from targets
         if (cameramanId != null) {
-            targets.removeIf(p -> p.getUniqueId().equals(cameramanId));
+            targets.removeIf(player -> player.getUniqueId().equals(cameramanId));
         }
-        // Remove spectators
-        targets.removeIf(p -> p.getGameMode() == GameMode.SPECTATOR);
+        targets.removeIf(player -> player.getGameMode() == GameMode.SPECTATOR || !isTargetAllowed(player));
         return targets;
+    }
+
+    private boolean isTargetAllowed(org.bukkit.entity.Entity entity) {
+        List<String> allowedWorlds = plugin.getConfig().getStringList("targetFilters.allowedWorlds");
+        if (!allowedWorlds.isEmpty() && !allowedWorlds.contains(entity.getWorld().getName())) {
+            return false;
+        }
+
+        if (entity instanceof Player player) {
+            if (plugin.getConfig().getStringList("targetFilters.excludedPlayers").stream()
+                    .anyMatch(name -> name.equalsIgnoreCase(player.getName()))) {
+                return false;
+            }
+            if (plugin.getConfig().getStringList("targetFilters.excludedPermissions").stream()
+                    .anyMatch(player::hasPermission)) {
+                return false;
+            }
+        }
+
+        Player cameraman = getCameraman();
+        if (cameraman != null) {
+            double minDistance = plugin.getConfig().getDouble("targetFilters.minDistance", 0.0);
+            double maxDistance = plugin.getConfig().getDouble("targetFilters.maxDistance", 0.0);
+            if ((minDistance > 0.0 || maxDistance > 0.0)
+                    && !cameraman.getWorld().equals(entity.getWorld())) {
+                return false;
+            }
+            if (cameraman.getWorld().equals(entity.getWorld())) {
+                double distance = cameraman.getLocation().distance(entity.getLocation());
+                if (distance < minDistance || (maxDistance > 0.0 && distance > maxDistance)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    public void handleTargetUnavailable(UUID targetId) {
+        if (targetId == null || !targetId.equals(currentTargetId)) {
+            return;
+        }
+        currentTargetId = null;
+        clearTarget();
+        List<? extends org.bukkit.entity.Entity> replacements;
+        if (mobTargetMode) {
+            replacements = getPotentialMobTargets();
+        } else {
+            replacements = getPotentialTargets();
+        }
+        if (!replacements.isEmpty()) {
+            setTarget(replacements.get(0));
+        }
+    }
+
+    public void refreshPlayerTarget(Player player) {
+        if (player != null && player.getUniqueId().equals(currentTargetId) && isTargetAllowed(player)) {
+            setTarget(player);
+        } else if (player != null && player.getUniqueId().equals(currentTargetId)) {
+            handleTargetUnavailable(player.getUniqueId());
+        }
+    }
+
+    public void scheduleTargetUnavailable(UUID targetId) {
+        Bukkit.getScheduler().runTask(plugin, () -> handleTargetUnavailable(targetId));
     }
 
     public void setMobTargetMode(boolean enabled) {
@@ -590,7 +719,7 @@ public class CameramanManager {
         if (cameraman != null) {
             for (org.bukkit.entity.Entity entity : cameraman.getNearbyEntities(50, 50, 50)) {
                 if (entity instanceof org.bukkit.entity.LivingEntity && !(entity instanceof Player)
-                        && !(entity instanceof org.bukkit.entity.ArmorStand)) {
+                        && !(entity instanceof org.bukkit.entity.ArmorStand) && isTargetAllowed(entity)) {
                     mobs.add((org.bukkit.entity.LivingEntity) entity);
                 }
             }
@@ -714,6 +843,7 @@ public class CameramanManager {
             return;
         }
 
+        currentTargetId = null;
         // Resolve RANDOM if needed
         SpectatePerspective actualPerspective = perspective;
         if (perspective == SpectatePerspective.RANDOM) {

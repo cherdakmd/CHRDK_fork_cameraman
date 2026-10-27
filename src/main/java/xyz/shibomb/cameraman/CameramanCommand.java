@@ -5,8 +5,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -20,10 +18,12 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
 
     private final CameramanManager manager;
     private final Messages messages;
+    private final CameramanMenu menu;
 
-    public CameramanCommand(CameramanManager manager) {
+    public CameramanCommand(CameramanManager manager, CameramanMenu menu) {
         this.manager = manager;
         this.messages = manager.getMessages();
+        this.menu = menu;
     }
 
     private static final Map<String, String> RUSSIAN_SUBCOMMANDS = Map.ofEntries(
@@ -55,7 +55,9 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
             Map.entry("пейзаж", "scenic"),
             Map.entry("автопейзаж", "autoscenic"),
             Map.entry("скоростьдвижения", "movespeed"),
-            Map.entry("направлениедвижения", "movedirection"));
+            Map.entry("направлениедвижения", "movedirection"),
+            Map.entry("меню", "menu"),
+            Map.entry("профиль", "profile"));
 
     private static String normalizeSubCommand(String input) {
         String normalized = input.toLowerCase(Locale.ROOT);
@@ -76,7 +78,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     "mobnightvision", "showmessage", "nightvisionthreshold", "distance", "height",
                     "orbitspeed", "orbitdirection", "smoothness", "flybyduration", "craneduration",
                     "craneheightmin", "craneheightmax", "random", "scenic", "autoscenic", "movespeed",
-                    "movedirection"));
+                    "movedirection", "menu", "profile"));
             subcommands.addAll(RUSSIAN_SUBCOMMANDS.keySet());
             return matching(subcommands, args[0]);
         }
@@ -88,6 +90,14 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         String subcommand = normalizeSubCommand(args[0]);
         int argumentIndex = args.length - 1;
         String current = args[args.length - 1];
+
+        if (subcommand.equals("profile") && argumentIndex == 1) {
+            return matching(List.of("save", "load", "delete", "list"), current);
+        }
+        if (subcommand.equals("profile") && argumentIndex == 2 && args.length >= 2
+                && (args[1].equalsIgnoreCase("load") || args[1].equalsIgnoreCase("delete"))) {
+            return matching(manager.getProfileNames(), current);
+        }
 
         if ((subcommand.equals("set") || subcommand.equals("target")) && argumentIndex == 1) {
             return matching(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), current);
@@ -138,18 +148,12 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 .toList();
     }
 
-    private static final Pattern NUMBER_PATTERN = Pattern.compile("-?\\d+(?:\\.\\d+)?");
-    private static final Pattern RANGE_PATTERN = Pattern.compile("^(-?\\d+(?:\\.\\d+)?)-(-?\\d+(?:\\.\\d+)?)$");
-
     private Boolean parseBooleanArgument(CommandSender sender, String value) {
-        if (value.equalsIgnoreCase("true")) {
-            return true;
+        if (!InputValidators.isBoolean(value)) {
+            sender.sendMessage(messages.get("invalid-boolean"));
+            return null;
         }
-        if (value.equalsIgnoreCase("false")) {
-            return false;
-        }
-        sender.sendMessage(messages.get("invalid-boolean"));
-        return null;
+        return Boolean.parseBoolean(value);
     }
 
     private boolean isValidSpectateMode(String value) {
@@ -168,40 +172,19 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
     }
 
     private Long parsePositiveLongArgument(CommandSender sender, String value) {
-        try {
-            long parsed = Long.parseLong(value);
-            if (parsed > 0 && parsed <= Long.MAX_VALUE / 20L) {
-                return parsed;
-            }
-        } catch (NumberFormatException ignored) {
-            // Report a single user-friendly validation message below.
+        if (!InputValidators.isPositiveInteger(value)) {
+            sender.sendMessage(messages.get("invalid-integer"));
+            return null;
         }
-        sender.sendMessage(messages.get("invalid-integer"));
-        return null;
+        return Long.parseLong(value);
     }
 
     private boolean isPositiveFiniteNumber(String value) {
-        try {
-            double parsed = Double.parseDouble(value);
-            return Double.isFinite(parsed) && parsed > 0;
-        } catch (NumberFormatException e) {
-            return false;
-        }
+        return InputValidators.isPositiveFiniteNumber(value);
     }
 
     private boolean isFiniteNumberOrRange(String value) {
-        String trimmed = value.trim();
-        try {
-            if (NUMBER_PATTERN.matcher(trimmed).matches()) {
-                return Double.isFinite(Double.parseDouble(trimmed));
-            }
-            Matcher matcher = RANGE_PATTERN.matcher(trimmed);
-            return matcher.matches()
-                    && Double.isFinite(Double.parseDouble(matcher.group(1)))
-                    && Double.isFinite(Double.parseDouble(matcher.group(2)));
-        } catch (NumberFormatException e) {
-            return false;
-        }
+        return InputValidators.isFiniteNumberOrRange(value);
     }
 
     @Override
@@ -214,6 +197,46 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         String subCommand = normalizeSubCommand(args[0]);
 
         switch (subCommand) {
+            case "menu":
+                if (sender instanceof Player player) {
+                    menu.open(player);
+                } else {
+                    sender.sendMessage(messages.get("menu-player-only"));
+                }
+                break;
+
+            case "profile":
+                if (args.length < 2) {
+                    sender.sendMessage(messages.get("profile-usage"));
+                    return true;
+                }
+                String profileAction = args[1].toLowerCase(Locale.ROOT);
+                if (profileAction.equals("list")) {
+                    List<String> profiles = manager.getProfileNames();
+                    sender.sendMessage(profiles.isEmpty()
+                            ? messages.get("profile-empty")
+                            : messages.get("profile-list", String.join(", ", profiles)));
+                    return true;
+                }
+                if (args.length < 3) {
+                    sender.sendMessage(messages.get("profile-usage"));
+                    return true;
+                }
+                String profileName = args[2];
+                switch (profileAction) {
+                    case "save" -> sender.sendMessage(manager.saveProfile(profileName)
+                            ? messages.get("profile-saved", profileName)
+                            : messages.get("profile-invalid-name"));
+                    case "load" -> sender.sendMessage(manager.loadProfile(profileName)
+                            ? messages.get("profile-loaded", profileName)
+                            : messages.get("profile-not-found", profileName));
+                    case "delete" -> sender.sendMessage(manager.deleteProfile(profileName)
+                            ? messages.get("profile-deleted", profileName)
+                            : messages.get("profile-not-found", profileName));
+                    default -> sender.sendMessage(messages.get("profile-usage"));
+                }
+                break;
+
             case "set":
                 if (args.length < 2) {
                     sender.sendMessage(messages.get("usage-set"));
