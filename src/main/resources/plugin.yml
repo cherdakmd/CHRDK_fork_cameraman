@@ -1,7 +1,7 @@
 name: Cameraman
 version: '${project.version}'
 main: xyz.shibomb.cameraman.CameramanPlugin
-api-version: '1.21.11'
+api-version: '26.3'
 commands:
   cameraman:
     aliases: [камера]
