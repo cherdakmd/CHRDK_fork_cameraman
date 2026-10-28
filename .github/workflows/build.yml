@@ -14,7 +14,6 @@ jobs:
       fail-fast: false
       matrix:
         paper-api-version:
-          - 1.21.11-R0.1-SNAPSHOT
           - 26.3.build.218-stable
     steps:
       - name: Checkout source
