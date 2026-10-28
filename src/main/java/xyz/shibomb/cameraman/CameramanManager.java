@@ -428,7 +428,7 @@ public class CameramanManager {
                         sendInfoMessage(cameraman, messages.get("now-spectating-pov", target.getName()));
                     } else {
                         cameraman.setSpectatorTarget(null);
-                        startSpectateTask(cameraman, target, cameraTarget, shot, activePerspective);
+                        startSpectateTask(cameraman, cameraTarget, shot, activePerspective);
                         sendInfoMessage(cameraman,
                                 messages.get("now-spectating-perspective", target.getName(), activePerspective));
                     }
