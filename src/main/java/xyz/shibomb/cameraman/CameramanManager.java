@@ -20,6 +20,7 @@ import xyz.shibomb.cameraman.shots.DynamicFollowShot;
 import xyz.shibomb.cameraman.shots.FlybyShot;
 import xyz.shibomb.cameraman.shots.OrbitShot;
 import xyz.shibomb.cameraman.shots.StaticShot;
+import xyz.shibomb.cameraman.targets.CameraTarget;
 import xyz.shibomb.cameraman.targets.EntityTarget;
 import xyz.shibomb.cameraman.targets.LocationTarget;
 import xyz.shibomb.cameraman.shots.MoveShot;
@@ -47,6 +48,7 @@ public class CameramanManager {
     private boolean teleportSmooth = false;
     private long teleportSmoothDuration = 3L; // Seconds
     private double teleportSmoothSpeed;
+    private double cameraSmoothing = 0.35;
     private SmoothTeleportTask currentTeleportTask;
     private SpectateState spectateMode = SpectateState.ENABLED;
     private SpectatePerspective spectatePerspective = SpectatePerspective.POV;
@@ -131,6 +133,7 @@ public class CameramanManager {
         this.teleportSmooth = config.getBoolean("teleportSmooth", false);
         this.teleportSmoothDuration = config.getLong("teleportSmoothDuration", 3L);
         this.teleportSmoothSpeed = config.getDouble("teleportSmoothSpeed", 50.0);
+        this.cameraSmoothing = Math.max(0.01, Math.min(1.0, config.getDouble("cameraSmoothing", 0.35)));
 
         String spectateModeStr = config.getString("spectateMode", "true");
         this.spectateMode = parseSpectateState(spectateModeStr);
@@ -287,7 +290,7 @@ public class CameramanManager {
     private static final List<String> PROFILE_SETTINGS = List.of(
             "newcomerMode", "rotationMode", "rotationInterval", "minRotationDistance", "mobTargetMode",
             "autoMobTarget", "autoMobTargetDelay", "teleportSmooth", "teleportSmoothDuration",
-            "teleportSmoothSpeed", "spectateMode", "spectatePerspective", "mobSpectateMode",
+            "teleportSmoothSpeed", "cameraSmoothing", "spectateMode", "spectatePerspective", "mobSpectateMode",
             "mobSpectatePerspective", "mobNightVision", "showMessage", "nightVisionThreshold",
             "spectateDistance", "spectateHeight", "orbitSpeed", "orbitDirection", "dynamicSmoothness",
             "flybyDuration", "craneDuration", "craneHeightMin", "craneHeightMax", "moveX", "moveY",
@@ -412,87 +415,61 @@ public class CameramanManager {
 
             double maxDist = parseAndCalculate(spectateDistance);
             double maxHeight = parseAndCalculate(spectateHeight);
+            boolean activeSpectateMode = target instanceof Player
+                    ? resolveSpectateState(spectateMode)
+                    : resolveSpectateState(mobSpectateMode);
+            CameraShot shot = createCameraShot(activePerspective, maxDist, maxHeight);
+            EntityTarget cameraTarget = new EntityTarget(target);
 
             Runnable onTargetSet = () -> {
-                boolean activeSpectateMode;
-                if (target instanceof Player) {
-                    activeSpectateMode = resolveSpectateState(spectateMode);
-                } else {
-                    activeSpectateMode = resolveSpectateState(mobSpectateMode);
-                }
-
                 if (activeSpectateMode) {
                     if (activePerspective == SpectatePerspective.POV) {
                         cameraman.setSpectatorTarget(target);
                         sendInfoMessage(cameraman, messages.get("now-spectating-pov", target.getName()));
                     } else {
-                        // For BEHIND/FRONT/ORBIT, we don't use setSpectatorTarget (it forces POV)
-                        // Instead we start the positioning task
                         cameraman.setSpectatorTarget(null);
-                        startSpectateTask(cameraman, target, activePerspective, maxDist, maxHeight);
+                        startSpectateTask(cameraman, target, cameraTarget, shot, activePerspective);
                         sendInfoMessage(cameraman,
                                 messages.get("now-spectating-perspective", target.getName(), activePerspective));
                     }
                 } else {
                     sendInfoMessage(cameraman, messages.get("arrived-at", target.getName()));
-
-                    // Auto Scenic Check (if not in spectate mode)
                     if (autoScenic) {
                         startScenicTask(target.getLocation(), autoScenicPerspective);
                     }
                 }
 
-                // Start Adaptive Night Vision check if applicable
                 if (mobNightVision && target instanceof org.bukkit.entity.LivingEntity && !(target instanceof Player)) {
                     startLightCheckTask(cameraman, (org.bukkit.entity.LivingEntity) target);
                 }
             };
 
-            if (teleportSmooth) {
-                // Check if in same world
-                if (cameraman.getWorld().equals(target.getLocation().getWorld())) {
-                    sendInfoMessage(cameraman, messages.get("moving-to", target.getName()));
-
-                    // Calculate duration based on distance and speed
-                    double distanceToTarget = cameraman.getLocation().distance(target.getLocation());
-                    double calculatedDuration = distanceToTarget / teleportSmoothSpeed;
-                    // Ensure minimum duration
-                    long finalDuration = (long) Math.max(teleportSmoothDuration, calculatedDuration);
-
-                    CameraShot shot = createCameraShot(activePerspective, maxDist, maxHeight);
-                    currentTeleportTask = new SmoothTeleportTask(cameraman, new EntityTarget(target),
-                            finalDuration * 20L,
-                            onTargetSet, shot);
-                    currentTeleportTask.runTaskTimer(plugin, 0L, 1L);
-                    return; // Return early, don't execute "else"
-                }
-                // If different worlds, fall through to instant teleport
+            boolean canInterpolate = teleportSmooth
+                    && cameraman.getWorld().equals(target.getWorld())
+                    && !(activeSpectateMode && activePerspective == SpectatePerspective.POV);
+            if (canInterpolate) {
+                sendInfoMessage(cameraman, messages.get("moving-to", target.getName()));
+                double distanceToTarget = cameraman.getLocation().distance(target.getLocation());
+                double calculatedDuration = distanceToTarget / Math.max(1.0, teleportSmoothSpeed);
+                long finalDuration = (long) Math.max(teleportSmoothDuration, calculatedDuration);
+                stopSpectateTask();
+                currentTeleportTask = new SmoothTeleportTask(cameraman, cameraTarget, finalDuration * 20L,
+                        onTargetSet, shot);
+                currentTeleportTask.runTaskTimer(plugin, 0L, 1L);
+                return;
             }
 
-            // "else" block effectively (if !teleportSmooth OR different worlds)
-            {
-                boolean activeSpectateMode = (target instanceof Player) ? resolveSpectateState(spectateMode)
-                        : resolveSpectateState(mobSpectateMode);
-                if (activeSpectateMode) {
-                    onTargetSet.run();
-                } else {
-                    // Instant teleport with perspective
-                    CameraShot shot = createCameraShot(activePerspective, maxDist, maxHeight);
-                    Location targetLoc = shot.getNextLocation(cameraman, new EntityTarget(target), 0); // Get initial
-                                                                                                       // position
-                    cameraman.teleport(targetLoc);
-                    sendInfoMessage(cameraman, messages.get("moved-to", target.getName()));
-
-                    // Auto Scenic Check (if not in spectate mode)
-                    if (autoScenic) {
-                        startScenicTask(target.getLocation(), autoScenicPerspective);
-                    }
-
-                    // Start Adaptive Night Vision check if applicable (Instant teleport case)
-                    if (mobNightVision && target instanceof org.bukkit.entity.LivingEntity
-                            && !(target instanceof Player)) {
-                        startLightCheckTask(cameraman, (org.bukkit.entity.LivingEntity) target);
-                    }
+            if (activeSpectateMode) {
+                onTargetSet.run();
+            } else {
+                Location targetLoc = shot.getNextLocation(cameraman, cameraTarget, 0);
+                cameraman.teleport(targetLoc);
+                sendInfoMessage(cameraman, messages.get("moved-to", target.getName()));
+                if (autoScenic) {
+                    startScenicTask(target.getLocation(), autoScenicPerspective);
+                }
+                if (mobNightVision && target instanceof org.bukkit.entity.LivingEntity && !(target instanceof Player)) {
+                    startLightCheckTask(cameraman, (org.bukkit.entity.LivingEntity) target);
                 }
             }
         }
@@ -613,6 +590,10 @@ public class CameramanManager {
 
     public long getTeleportSmoothDuration() {
         return teleportSmoothDuration;
+    }
+
+    public double getCameraSmoothing() {
+        return cameraSmoothing;
     }
 
     public void setRotationMode(boolean enabled, long intervalSeconds) {
@@ -870,21 +851,21 @@ public class CameramanManager {
         }
     }
 
-    private void startSpectateTask(Player cameraman, org.bukkit.entity.Entity target, SpectatePerspective perspective,
-            double distance,
-            double height) {
-        if (target == null)
-            return;
+    private void startSpectateTask(Player cameraman, CameraTarget target, CameraShot shot,
+            SpectatePerspective perspective) {
+        if (target == null || !target.isValid()) return;
 
-        CameraShot shot = createCameraShot(perspective, distance, height);
-
-        // Cancel previous task
-        if (currentSpectateTask != null && !currentSpectateTask.isCancelled()) {
-            currentSpectateTask.cancel();
-        }
-
-        currentSpectateTask = new SpectateTask(cameraman, new EntityTarget(target), shot);
+        stopSpectateTask();
+        currentSpectateTask = new SpectateTask(cameraman, target, shot, getSmoothingFor(perspective));
         currentSpectateTask.runTaskTimer(plugin, 0L, 1L);
+    }
+
+    private double getSmoothingFor(SpectatePerspective perspective) {
+        if (perspective == SpectatePerspective.DYNAMIC || perspective == SpectatePerspective.DYNAMIC_BEHIND
+                || perspective == SpectatePerspective.DYNAMIC_FRONT || perspective == SpectatePerspective.DYNAMIC_POV) {
+            return Math.max(0.01, Math.min(1.0, Double.parseDouble(dynamicSmoothness)));
+        }
+        return cameraSmoothing;
     }
 
     public void startScenicTask(Location startLocation, SpectatePerspective perspective) {
@@ -923,7 +904,8 @@ public class CameramanManager {
         // Stop other tasks
         stopFollowing();
 
-        currentSpectateTask = new SpectateTask(cameraman, new LocationTarget(startLocation), shot);
+        currentSpectateTask = new SpectateTask(cameraman, new LocationTarget(startLocation), shot,
+                getSmoothingFor(actualPerspective));
         // Execute immediately to prevent 1-tick jitter
         currentSpectateTask.run();
         // Schedule subsequent runs starting from next tick
@@ -961,8 +943,7 @@ public class CameramanManager {
             return new OrbitShot(distance, speed, height);
         } else if (perspective == SpectatePerspective.DYNAMIC || perspective == SpectatePerspective.DYNAMIC_BEHIND
                 || perspective == SpectatePerspective.DYNAMIC_FRONT || perspective == SpectatePerspective.DYNAMIC_POV) {
-            double smooth = Double.parseDouble(dynamicSmoothness);
-            return new DynamicFollowShot(distance, height, smooth, perspective);
+            return new DynamicFollowShot(distance, height, perspective);
         } else if (perspective == SpectatePerspective.FLYBY) {
             double dur = Double.parseDouble(flybyDuration);
             return new FlybyShot(dur);

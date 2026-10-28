@@ -65,7 +65,8 @@ Telegram: [https://t.me/cherdakmd](https://t.me/cherdakmd)
 
 - `/cameraman spectatemode <true|false|RANDOM> [ракурс]` — режим наблюдения за игроками.
 - `/cameraman mobspectatemode <true|false|RANDOM> [ракурс]` — режим наблюдения за мобами.
-- `/cameraman teleportsmooth <true|false> [длительность]` — плавная телепортация; длительность в секундах.
+- `/cameraman teleportsmooth <true|false> [длительность]` — плавный переход к новой цели; длительность в секундах.
+- Параметр `cameraSmoothing` в `config.yml` (0.01–1.0, по умолчанию 0.35) сглаживает слежение во всех движущихся ракурсах; меньше — мягче, но медленнее. Для DYNAMIC-ракурсов используется `dynamicSmoothness`.
 - `/cameraman mobnightvision <true|false>` — ночное зрение при съёмке мобов.
 - `/cameraman nightvisionthreshold <0-15>` — порог освещённости для адаптивного ночного зрения.
 - `/cameraman scenic <true|false> [ракурс]` — запустить/остановить съёмку без цели от текущей позиции.
