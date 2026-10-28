@@ -1,4 +1,4 @@
-name: Кинематографичная камера
+name: Cameraman
 version: '${project.version}'
 main: xyz.shibomb.cameraman.CameramanPlugin
 api-version: '1.21.11'
