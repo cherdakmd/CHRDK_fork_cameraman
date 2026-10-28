@@ -599,14 +599,28 @@ public class CameramanManager {
         return newcomerMode;
     }
 
+    public boolean isRotationMode() {
+        return rotationMode;
+    }
+
+    public long getRotationIntervalSeconds() {
+        return rotationInterval / 20L;
+    }
+
+    public boolean isTeleportSmooth() {
+        return teleportSmooth;
+    }
+
+    public long getTeleportSmoothDuration() {
+        return teleportSmoothDuration;
+    }
+
     public void setRotationMode(boolean enabled, long intervalSeconds) {
         this.rotationMode = enabled;
 
         config.set("rotationMode", enabled);
-        if (enabled) {
-            config.set("rotationInterval", intervalSeconds);
-            this.rotationInterval = intervalSeconds * 20L;
-        }
+        config.set("rotationInterval", intervalSeconds);
+        this.rotationInterval = intervalSeconds * 20L;
         plugin.saveConfig();
 
         checkAndStartRotationTask();
