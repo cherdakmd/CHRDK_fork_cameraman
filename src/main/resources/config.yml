@@ -30,6 +30,8 @@ targetFilters:
   allowedWorlds: []
   excludedPlayers: []
   excludedPermissions: []
+  excludedGameModes: [] # SURVIVAL, CREATIVE, ADVENTURE, SPECTATOR
+  excludeInvisible: false
   minDistance: 0.0
   maxDistance: 0.0 # 0 отключает верхнее ограничение
 
@@ -57,6 +59,10 @@ teleportSmoothSpeed: 50.0
 # Сглаживание камеры для всех движущихся ракурсов (0.01–1.0).
 # Чем ниже значение, тем мягче и медленнее камера догоняет целевую позицию.
 cameraSmoothing: 0.35
+# Кривая плавного перехода: LINEAR, SMOOTHSTEP или EASE_IN_OUT.
+cameraEasing: SMOOTHSTEP
+# Показывать текущий режим и цель в action bar.
+cameraHud: true
 
 # Включён ли режим наблюдения за игроками.
 spectateMode: true

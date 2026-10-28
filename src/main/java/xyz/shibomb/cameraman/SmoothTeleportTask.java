@@ -4,6 +4,8 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import java.util.function.BooleanSupplier;
+
 import xyz.shibomb.cameraman.shots.CameraShot;
 import xyz.shibomb.cameraman.targets.CameraTarget;
 
@@ -15,16 +17,20 @@ public class SmoothTeleportTask extends BukkitRunnable {
     private final Runnable onComplete;
     private final Location startLocation;
     private final Location destination;
+    private final String easing;
+    private final BooleanSupplier paused;
     private long currentTick;
 
     public SmoothTeleportTask(Player cameraman, CameraTarget target, long totalTicks, Runnable onComplete,
-            CameraShot cameraShot) {
+            CameraShot cameraShot, String easing, BooleanSupplier paused) {
         this.cameraman = cameraman;
         this.target = target;
         this.totalTicks = Math.max(1L, totalTicks);
         this.onComplete = onComplete;
         this.startLocation = cameraman.getLocation().clone();
         this.destination = cameraShot.getNextLocation(cameraman, target, 0L).clone();
+        this.easing = easing;
+        this.paused = paused;
     }
 
     @Override
@@ -34,6 +40,8 @@ public class SmoothTeleportTask extends BukkitRunnable {
             return;
         }
 
+        if (paused != null && paused.getAsBoolean()) return;
+
         if (currentTick >= totalTicks) {
             cameraman.teleport(destination);
             cancel();
@@ -42,8 +50,9 @@ public class SmoothTeleportTask extends BukkitRunnable {
         }
 
         double progress = (double) currentTick / totalTicks;
-        cameraman.teleport(CameraInterpolation.lerp(startLocation, destination,
-                CameraInterpolation.smoothStep(progress)));
+        Location frame = CameraInterpolation.lerp(startLocation, destination,
+                CameraInterpolation.ease(progress, easing));
+        cameraman.teleport(CameraInterpolation.avoidSolidBlocks(cameraman, frame));
         currentTick++;
     }
 }

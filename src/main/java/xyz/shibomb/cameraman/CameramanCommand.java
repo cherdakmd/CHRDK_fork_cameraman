@@ -61,7 +61,11 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
             Map.entry("направлениедвижения", "movedirection"),
             Map.entry("меню", "menu"),
             Map.entry("профиль", "profile"),
-            Map.entry("операторы", "operators"));
+            Map.entry("операторы", "operators"),
+            Map.entry("траектория", "path"),
+            Map.entry("сцена", "scene"),
+            Map.entry("пауза", "pause"),
+            Map.entry("дальше", "next"));
 
     private static String normalizeSubCommand(String input) {
         String normalized = input.toLowerCase(Locale.ROOT);
@@ -84,7 +88,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     "mobnightvision", "showmessage", "nightvisionthreshold", "distance", "height",
                     "orbitspeed", "orbitdirection", "smoothness", "flybyduration", "craneduration",
                     "craneheightmin", "craneheightmax", "random", "scenic", "autoscenic", "movespeed",
-                    "movedirection", "menu", "profile", "operators"));
+                    "movedirection", "menu", "profile", "operators", "path", "scene", "pause", "next"));
             subcommands.addAll(RUSSIAN_SUBCOMMANDS.keySet());
             return matching(subcommands, args[0]);
         }
@@ -102,6 +106,21 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         }
         if (subcommand.equals("unset") && argumentIndex == 1) {
             return matching(operators.getOperatorNames(), current);
+        }
+        if (subcommand.equals("path") && argumentIndex == 1) {
+            return matching(List.of("add", "play", "list", "delete", "stop", "export", "import"), current);
+        }
+        if (subcommand.equals("path") && argumentIndex == 2) {
+            return matching(manager.getCameraRouteNames(), current);
+        }
+        if (subcommand.equals("scene") && argumentIndex == 1) {
+            return matching(List.of("add", "play", "list", "delete"), current);
+        }
+        if (subcommand.equals("scene") && argumentIndex == 2 && args[1].equalsIgnoreCase("play")) {
+            return matching(manager.getCameraSceneNames(), current);
+        }
+        if (subcommand.equals("scene") && argumentIndex == 3 && args[1].equalsIgnoreCase("add")) {
+            return matching(manager.getCameraRouteNames(), current);
         }
         if (subcommand.equals("profile") && argumentIndex == 2 && args.length >= 2
                 && (args[1].equalsIgnoreCase("load") || args[1].equalsIgnoreCase("delete"))) {
@@ -214,6 +233,102 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 } else {
                     sender.sendMessage(messages.get("menu-player-only"));
                 }
+                break;
+
+            case "path": {
+                if (args.length < 2) {
+                    sender.sendMessage(messages.get("path-usage"));
+                    return true;
+                }
+                String action = args[1].toLowerCase(Locale.ROOT);
+                if (action.equals("list")) {
+                    List<String> names = manager.getCameraRouteNames();
+                    sender.sendMessage(names.isEmpty() ? messages.get("path-empty")
+                            : messages.get("path-list", String.join(", ", names)));
+                    return true;
+                }
+                if (action.equals("stop")) {
+                    sender.sendMessage(messages.get(manager.stopPathPlayback() ? "path-stopped" : "path-not-playing"));
+                    return true;
+                }
+                if (args.length < 3) {
+                    sender.sendMessage(messages.get("path-usage"));
+                    return true;
+                }
+                String routeName = args[2];
+                switch (action) {
+                    case "add" -> {
+                        if (!(sender instanceof Player)) sender.sendMessage(messages.get("menu-player-only"));
+                        else sender.sendMessage(messages.get(manager.addCameraRoutePoint(routeName)
+                                ? "path-point-added" : "path-invalid"));
+                    }
+                    case "play" -> {
+                        long ticks = 40L;
+                        if (args.length >= 4) {
+                            Long parsed = parsePositiveLongArgument(sender, args[3]);
+                            if (parsed == null) return true;
+                            ticks = parsed;
+                        }
+                        sender.sendMessage(messages.get(manager.playCameraRoute(routeName, ticks)
+                                ? "path-started" : "path-not-found"));
+                    }
+                    case "delete" -> sender.sendMessage(messages.get(manager.deleteCameraRoute(routeName)
+                            ? "path-deleted" : "path-not-found"));
+                    case "export" -> sender.sendMessage(messages.get(manager.exportCameraRoute(routeName)
+                            ? "path-exported" : "path-export-failed"));
+                    case "import" -> sender.sendMessage(messages.get(manager.importCameraRoute(routeName)
+                            ? "path-imported" : "path-import-failed"));
+                    default -> sender.sendMessage(messages.get("path-usage"));
+                }
+                break;
+            }
+
+            case "scene": {
+                if (args.length < 2) {
+                    sender.sendMessage(messages.get("scene-usage"));
+                    return true;
+                }
+                String action = args[1].toLowerCase(Locale.ROOT);
+                if (action.equals("list")) {
+                    List<String> names = manager.getCameraSceneNames();
+                    sender.sendMessage(names.isEmpty() ? messages.get("scene-empty")
+                            : messages.get("scene-list", String.join(", ", names)));
+                    return true;
+                }
+                if (args.length < 3) {
+                    sender.sendMessage(messages.get("scene-usage"));
+                    return true;
+                }
+                String sceneName = args[2];
+                switch (action) {
+                    case "add" -> {
+                        if (args.length < 4) sender.sendMessage(messages.get("scene-usage"));
+                        else sender.sendMessage(messages.get(manager.addRouteToScene(sceneName, args[3])
+                                ? "scene-route-added" : "scene-route-invalid"));
+                    }
+                    case "play" -> {
+                        long ticks = 40L;
+                        if (args.length >= 4) {
+                            Long parsed = parsePositiveLongArgument(sender, args[3]);
+                            if (parsed == null) return true;
+                            ticks = parsed;
+                        }
+                        sender.sendMessage(messages.get(manager.playCameraScene(sceneName, ticks)
+                                ? "scene-started" : "scene-invalid"));
+                    }
+                    case "delete" -> sender.sendMessage(messages.get(manager.deleteCameraScene(sceneName)
+                            ? "scene-deleted" : "scene-not-found"));
+                    default -> sender.sendMessage(messages.get("scene-usage"));
+                }
+                break;
+            }
+
+            case "pause":
+                sender.sendMessage(messages.get(manager.toggleCameraPause() ? "camera-paused" : "camera-resumed"));
+                break;
+
+            case "next":
+                sender.sendMessage(messages.get(manager.advanceTarget() ? "target-advanced" : "menu-no-targets"));
                 break;
 
             case "profile":

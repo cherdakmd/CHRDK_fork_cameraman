@@ -22,6 +22,14 @@ class CameraInterpolationTest {
     }
 
     @Test
+    void supportsConfiguredEasingCurves() {
+        assertEquals(0.5, CameraInterpolation.ease(0.5, "LINEAR"), 1.0e-9);
+        assertEquals(0.5, CameraInterpolation.ease(0.5, "SMOOTHSTEP"), 1.0e-9);
+        assertEquals(0.5, CameraInterpolation.ease(0.5, "EASE_IN_OUT"), 1.0e-9);
+        assertEquals(0.5, CameraInterpolation.ease(0.5, "unknown"), 1.0e-9);
+    }
+
+    @Test
     void smoothStepHasZeroVelocityAtEndpoints() {
         assertEquals(0.0, CameraInterpolation.smoothStep(0.0), 1.0e-9);
         assertEquals(0.5, CameraInterpolation.smoothStep(0.5), 1.0e-9);

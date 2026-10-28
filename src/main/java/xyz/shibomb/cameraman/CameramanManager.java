@@ -10,6 +10,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -49,7 +50,12 @@ public class CameramanManager {
     private long teleportSmoothDuration = 3L; // Seconds
     private double teleportSmoothSpeed;
     private double cameraSmoothing = 0.35;
+    private String cameraEasing = "SMOOTHSTEP";
+    private boolean cameraHud = true;
+    private boolean cameraPaused;
     private SmoothTeleportTask currentTeleportTask;
+    private final CameraRouteStore routeStore;
+    private CameraPathTask currentPathTask;
     private SpectateState spectateMode = SpectateState.ENABLED;
     private SpectatePerspective spectatePerspective = SpectatePerspective.POV;
     private SpectateState mobSpectateMode = SpectateState.ENABLED;
@@ -87,6 +93,9 @@ public class CameramanManager {
     public CameramanManager(JavaPlugin plugin, UUID operatorId) {
         this.plugin = plugin;
         this.messages = new Messages(plugin);
+        this.routeStore = plugin instanceof CameramanPlugin cameramanPlugin
+                && cameramanPlugin.getRouteStore() != null
+                        ? cameramanPlugin.getRouteStore() : new CameraRouteStore(plugin);
         if (operatorId == null) {
             this.config = plugin.getConfig();
             String uuidString = config.getString("cameraman");
@@ -134,6 +143,11 @@ public class CameramanManager {
         this.teleportSmoothDuration = config.getLong("teleportSmoothDuration", 3L);
         this.teleportSmoothSpeed = config.getDouble("teleportSmoothSpeed", 50.0);
         this.cameraSmoothing = Math.max(0.01, Math.min(1.0, config.getDouble("cameraSmoothing", 0.35)));
+        String configuredEasing = config.getString("cameraEasing", "SMOOTHSTEP");
+        this.cameraEasing = configuredEasing != null
+                && List.of("LINEAR", "SMOOTHSTEP", "EASE_IN_OUT").contains(configuredEasing.toUpperCase(Locale.ROOT))
+                        ? configuredEasing.toUpperCase(Locale.ROOT) : "SMOOTHSTEP";
+        this.cameraHud = config.getBoolean("cameraHud", true);
 
         String spectateModeStr = config.getString("spectateMode", "true");
         this.spectateMode = parseSpectateState(spectateModeStr);
@@ -290,7 +304,7 @@ public class CameramanManager {
     private static final List<String> PROFILE_SETTINGS = List.of(
             "newcomerMode", "rotationMode", "rotationInterval", "minRotationDistance", "mobTargetMode",
             "autoMobTarget", "autoMobTargetDelay", "teleportSmooth", "teleportSmoothDuration",
-            "teleportSmoothSpeed", "cameraSmoothing", "spectateMode", "spectatePerspective", "mobSpectateMode",
+            "teleportSmoothSpeed", "cameraSmoothing", "cameraEasing", "cameraHud", "spectateMode", "spectatePerspective", "mobSpectateMode",
             "mobSpectatePerspective", "mobNightVision", "showMessage", "nightVisionThreshold",
             "spectateDistance", "spectateHeight", "orbitSpeed", "orbitDirection", "dynamicSmoothness",
             "flybyDuration", "craneDuration", "craneHeightMin", "craneHeightMax", "moveX", "moveY",
@@ -378,7 +392,7 @@ public class CameramanManager {
             }
             currentTargetId = target.getUniqueId();
 
-            // Stop any existing smooth teleport task
+            stopPathPlayback();
             if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
                 currentTeleportTask.cancel();
             }
@@ -454,7 +468,7 @@ public class CameramanManager {
                 long finalDuration = (long) Math.max(teleportSmoothDuration, calculatedDuration);
                 stopSpectateTask();
                 currentTeleportTask = new SmoothTeleportTask(cameraman, cameraTarget, finalDuration * 20L,
-                        onTargetSet, shot);
+                        onTargetSet, shot, cameraEasing, this::isCameraPaused);
                 currentTeleportTask.runTaskTimer(plugin, 0L, 1L);
                 return;
             }
@@ -482,6 +496,7 @@ public class CameramanManager {
             cameraman.setSpectatorTarget(null);
             stopLightCheckTask();
             stopSpectateTask();
+            stopPathPlayback();
             if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
                 currentTeleportTask.cancel();
                 currentTeleportTask = null;
@@ -572,6 +587,99 @@ public class CameramanManager {
         }
     }
 
+    public List<String> getCameraRouteNames() {
+        return routeStore.names();
+    }
+
+    public int getCameraRoutePointCount(String name) {
+        return routeStore.pointCount(name);
+    }
+
+    public boolean addCameraRoutePoint(String name) {
+        Player cameraman = getCameraman();
+        return cameraman != null && routeStore.addPoint(name, cameraman.getLocation());
+    }
+
+    public boolean deleteCameraRoute(String name) {
+        return routeStore.delete(name);
+    }
+
+    public boolean exportCameraRoute(String name) {
+        return routeStore.exportRoute(name);
+    }
+
+    public boolean importCameraRoute(String name) {
+        return routeStore.importRoute(name);
+    }
+
+    public boolean playCameraRoute(String name, long ticksPerSegment) {
+        return playCameraPath(routeStore.points(name), ticksPerSegment,
+                cameraHud ? messages.get("camera-path-hud", name) : null);
+    }
+
+    public List<String> getCameraSceneNames() {
+        return routeStore.sceneNames();
+    }
+
+    public boolean addRouteToScene(String sceneName, String routeName) {
+        return routeStore.addRouteToScene(sceneName, routeName);
+    }
+
+    public boolean deleteCameraScene(String sceneName) {
+        return routeStore.deleteScene(sceneName);
+    }
+
+    public boolean playCameraScene(String name, long ticksPerSegment) {
+        return playCameraPath(routeStore.scenePoints(name), ticksPerSegment,
+                cameraHud ? messages.get("camera-scene-hud", name) : null);
+    }
+
+    private boolean playCameraPath(List<Location> points, long ticksPerSegment, String hudMessage) {
+        Player cameraman = getCameraman();
+        if (cameraman == null || points.size() < 2) return false;
+        stopFollowing();
+        stopPathPlayback();
+        cameraman.setSpectatorTarget(null);
+        currentPathTask = new CameraPathTask(cameraman, points, ticksPerSegment, cameraEasing,
+                this::isCameraPaused, hudMessage);
+        currentPathTask.runTaskTimer(plugin, 0L, 1L);
+        return true;
+    }
+
+    public boolean stopPathPlayback() {
+        if (currentPathTask == null || currentPathTask.isCancelled()) {
+            currentPathTask = null;
+            return false;
+        }
+        currentPathTask.cancel();
+        currentPathTask = null;
+        return true;
+    }
+
+    public boolean isCameraPaused() {
+        return cameraPaused;
+    }
+
+    public boolean toggleCameraPause() {
+        cameraPaused = !cameraPaused;
+        return cameraPaused;
+    }
+
+    public boolean advanceTarget() {
+        List<? extends org.bukkit.entity.Entity> targets = mobTargetMode
+                ? getPotentialMobTargets() : getPotentialTargets();
+        if (targets.isEmpty()) return false;
+        int currentIndex = -1;
+        for (int i = 0; i < targets.size(); i++) {
+            if (targets.get(i).getUniqueId().equals(currentTargetId)) {
+                currentIndex = i;
+                break;
+            }
+        }
+        setTarget(targets.get((currentIndex + 1) % targets.size()));
+        return true;
+    }
+
     public boolean isNewcomerMode() {
         return newcomerMode;
     }
@@ -588,12 +696,59 @@ public class CameramanManager {
         return teleportSmooth;
     }
 
+    public SpectatePerspective getSpectatePerspective() {
+        return spectatePerspective;
+    }
+
+    public SpectatePerspective getMobSpectatePerspective() {
+        return mobSpectatePerspective;
+    }
+
+    public String getSpectateDistance() {
+        return spectateDistance;
+    }
+
+    public String getSpectateHeight() {
+        return spectateHeight;
+    }
+
+    public void adjustSpectateDistance(double delta) {
+        setSpectateDistance(adjustRange(spectateDistance, delta, 0.5));
+    }
+
+    public void adjustSpectateHeight(double delta) {
+        setSpectateHeight(adjustRange(spectateHeight, delta, 0.0));
+    }
+
+    private String adjustRange(String value, double delta, double minimum) {
+        try {
+            String[] parts = value.split("-", 2);
+            double low = Double.parseDouble(parts[0].trim());
+            double high = parts.length == 2 ? Double.parseDouble(parts[1].trim()) : low;
+            low = Math.max(minimum, low + delta);
+            high = Math.max(low, high + delta);
+            return parts.length == 2
+                    ? String.format(Locale.ROOT, "%.1f-%.1f", low, high)
+                    : String.format(Locale.ROOT, "%.1f", low);
+        } catch (NumberFormatException e) {
+            return String.format(Locale.ROOT, "%.1f", Math.max(minimum, delta));
+        }
+    }
+
     public long getTeleportSmoothDuration() {
         return teleportSmoothDuration;
     }
 
     public double getCameraSmoothing() {
         return cameraSmoothing;
+    }
+
+    public boolean isCameraHud() {
+        return cameraHud;
+    }
+
+    public String getCameraEasing() {
+        return cameraEasing;
     }
 
     public void setRotationMode(boolean enabled, long intervalSeconds) {
@@ -654,6 +809,14 @@ public class CameramanManager {
             }
             if (config.getStringList("targetFilters.excludedPermissions").stream()
                     .anyMatch(player::hasPermission)) {
+                return false;
+            }
+            if (config.getBoolean("targetFilters.excludeInvisible", false)
+                    && player.hasPotionEffect(org.bukkit.potion.PotionEffectType.INVISIBILITY)) {
+                return false;
+            }
+            if (config.getStringList("targetFilters.excludedGameModes").stream()
+                    .anyMatch(mode -> mode.equalsIgnoreCase(player.getGameMode().name()))) {
                 return false;
             }
         }
@@ -856,7 +1019,9 @@ public class CameramanManager {
         if (target == null || !target.isValid()) return;
 
         stopSpectateTask();
-        currentSpectateTask = new SpectateTask(cameraman, target, shot, getSmoothingFor(perspective));
+        String hudMessage = cameraHud ? messages.get("camera-hud", target.getName(), perspective.name()) : null;
+        currentSpectateTask = new SpectateTask(cameraman, target, shot, getSmoothingFor(perspective), hudMessage,
+                this::isCameraPaused);
         currentSpectateTask.runTaskTimer(plugin, 0L, 1L);
     }
 
@@ -904,8 +1069,10 @@ public class CameramanManager {
         // Stop other tasks
         stopFollowing();
 
-        currentSpectateTask = new SpectateTask(cameraman, new LocationTarget(startLocation), shot,
-                getSmoothingFor(actualPerspective));
+        LocationTarget sceneTarget = new LocationTarget(startLocation);
+        String hudMessage = cameraHud ? messages.get("camera-hud", sceneTarget.getName(), actualPerspective.name()) : null;
+        currentSpectateTask = new SpectateTask(cameraman, sceneTarget, shot,
+                getSmoothingFor(actualPerspective), hudMessage, this::isCameraPaused);
         // Execute immediately to prevent 1-tick jitter
         currentSpectateTask.run();
         // Schedule subsequent runs starting from next tick
@@ -913,6 +1080,7 @@ public class CameramanManager {
     }
 
     public void stopFollowing() {
+        stopPathPlayback();
         if (currentSpectateTask != null && !currentSpectateTask.isCancelled()) {
             currentSpectateTask.cancel();
         }

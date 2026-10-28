@@ -5,12 +5,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class CameramanPlugin extends JavaPlugin {
 
     private OperatorRegistry operators;
+    private CameraRouteStore routeStore;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         getLogger().info("Cameraman plugin has been enabled!");
 
+        this.routeStore = new CameraRouteStore(this);
         this.operators = new OperatorRegistry(this);
         CameramanMenu menu = new CameramanMenu(this);
         CameramanCommand cameramanCommand = new CameramanCommand(this.operators, menu);
@@ -28,6 +30,10 @@ public final class CameramanPlugin extends JavaPlugin {
 
     public OperatorRegistry getOperatorRegistry() {
         return operators;
+    }
+
+    public CameraRouteStore getRouteStore() {
+        return routeStore;
     }
 
     public CameramanManager getCameramanManager() {
