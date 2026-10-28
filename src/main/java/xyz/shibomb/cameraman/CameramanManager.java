@@ -360,6 +360,18 @@ public class CameramanManager {
         }
     }
 
+    private String getTargetDisplayName(org.bukkit.entity.Entity target) {
+        String displayName = target instanceof Player player ? player.getDisplayName() : target.getCustomName();
+        if (displayName == null || displayName.isBlank()) displayName = target.getName();
+        String withoutColors = org.bukkit.ChatColor.stripColor(displayName);
+        return withoutColors == null || withoutColors.isBlank() ? displayName : withoutColors;
+    }
+
+    public String getCurrentTargetDisplayName() {
+        org.bukkit.entity.Entity target = currentTargetId == null ? null : Bukkit.getEntity(currentTargetId);
+        return target == null ? null : getTargetDisplayName(target);
+    }
+
     public void setTarget(org.bukkit.entity.Entity target) {
         Player cameraman = getCameraman();
         if (cameraman != null && target != null) {
@@ -391,6 +403,7 @@ public class CameramanManager {
                 return;
             }
             currentTargetId = target.getUniqueId();
+            sendInfoMessage(cameraman, messages.get("target-switched", getTargetDisplayName(target)));
 
             stopPathPlayback();
             if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {

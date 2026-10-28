@@ -328,7 +328,12 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 break;
 
             case "next":
-                sender.sendMessage(messages.get(manager.advanceTarget() ? "target-advanced" : "menu-no-targets"));
+                if (manager.advanceTarget()) {
+                    String targetName = manager.getCurrentTargetDisplayName();
+                    sender.sendMessage(messages.get("target-advanced", targetName == null ? "?" : targetName));
+                } else {
+                    sender.sendMessage(messages.get("menu-no-targets"));
+                }
                 break;
 
             case "profile":
