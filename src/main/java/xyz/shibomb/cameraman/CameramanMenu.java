@@ -31,7 +31,7 @@ public final class CameramanMenu implements Listener {
     private final NamespacedKey targetKey;
     private final NamespacedKey actionKey;
     private final JavaPlugin plugin;
-    private final Map<UUID, CameramanManager> pendingProfileNames = new ConcurrentHashMap<>();
+    private final Map<UUID, ProfilePrompt> pendingProfileNames = new ConcurrentHashMap<>();
 
     public CameramanMenu(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -213,19 +213,23 @@ public final class CameramanMenu implements Listener {
 
     @EventHandler
     public void onProfileNameChat(AsyncPlayerChatEvent event) {
-        CameramanManager manager = pendingProfileNames.remove(event.getPlayer().getUniqueId());
-        if (manager == null) return;
+        ProfilePrompt prompt = pendingProfileNames.remove(event.getPlayer().getUniqueId());
+        if (prompt == null) return;
         event.setCancelled(true);
         String profileName = event.getMessage().trim();
+        CameramanManager manager = prompt.manager();
         Bukkit.getScheduler().runTask(plugin, () -> {
             Player player = event.getPlayer();
             if (!player.isOnline()) return;
             if (profileName.equalsIgnoreCase("cancel")) {
                 player.sendMessage(manager.getMessages().get("menu-profile-cancelled"));
-            } else if (manager.saveProfile(profileName)) {
+            } else if (prompt.renameFrom() == null && manager.saveProfile(profileName)) {
                 player.sendMessage(manager.getMessages().get("profile-saved", profileName));
+            } else if (prompt.renameFrom() != null && manager.renameProfile(prompt.renameFrom(), profileName)) {
+                player.sendMessage(manager.getMessages().get("profile-renamed", prompt.renameFrom(), profileName));
             } else {
-                player.sendMessage(manager.getMessages().get("profile-invalid-name"));
+                player.sendMessage(manager.getMessages().get(prompt.renameFrom() == null
+                        ? "profile-invalid-name" : "profile-rename-failed"));
             }
             openProfiles(player, manager);
         });
@@ -259,7 +263,7 @@ public final class CameramanMenu implements Listener {
             case "mobs-next" -> openMobTargets(viewer, manager, holder.page + 1);
             case "profiles" -> openProfiles(viewer, manager);
             case "profiles-save" -> {
-                pendingProfileNames.put(viewer.getUniqueId(), manager);
+                pendingProfileNames.put(viewer.getUniqueId(), new ProfilePrompt(manager, null));
                 viewer.closeInventory();
                 viewer.sendMessage(manager.getMessages().get("menu-profile-prompt"));
             }
@@ -334,6 +338,10 @@ public final class CameramanMenu implements Listener {
                                 ? manager.getMessages().get("profile-deleted", profile)
                                 : manager.getMessages().get("profile-not-found", profile));
                         openProfiles(viewer, manager);
+                    } else if (event.getClick() == ClickType.MIDDLE) {
+                        pendingProfileNames.put(viewer.getUniqueId(), new ProfilePrompt(manager, profile));
+                        viewer.closeInventory();
+                        viewer.sendMessage(manager.getMessages().get("menu-profile-rename-prompt", profile));
                     } else {
                         viewer.sendMessage(manager.loadProfile(profile)
                                 ? manager.getMessages().get("profile-loaded", profile)
@@ -368,6 +376,9 @@ public final class CameramanMenu implements Listener {
         } catch (IllegalArgumentException ignored) {
             viewer.sendMessage(manager.getMessages().get("menu-target-gone"));
         }
+    }
+
+    private record ProfilePrompt(CameramanManager manager, String renameFrom) {
     }
 
     private static final class MenuHolder implements InventoryHolder {

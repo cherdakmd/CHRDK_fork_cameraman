@@ -325,6 +325,26 @@ public class CameramanManager {
         return true;
     }
 
+    public boolean renameProfile(String oldName, String newName) {
+        if (!isValidProfileName(oldName) || !isValidProfileName(newName)
+                || !plugin.getConfig().isConfigurationSection("profiles." + oldName)) {
+            return false;
+        }
+        if (oldName.equals(newName)) return true;
+        if (plugin.getConfig().isConfigurationSection("profiles." + newName)) return false;
+        String oldPath = "profiles." + oldName + ".";
+        String newPath = "profiles." + newName + ".";
+        for (String setting : PROFILE_SETTINGS) {
+            String settingPath = oldPath + setting;
+            if (plugin.getConfig().contains(settingPath)) {
+                plugin.getConfig().set(newPath + setting, plugin.getConfig().get(settingPath));
+            }
+        }
+        plugin.getConfig().set("profiles." + oldName, null);
+        plugin.saveConfig();
+        return true;
+    }
+
     public boolean loadProfile(String name) {
         if (!isValidProfileName(name) || !plugin.getConfig().isConfigurationSection("profiles." + name)) {
             return false;
