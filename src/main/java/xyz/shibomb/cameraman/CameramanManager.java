@@ -330,7 +330,8 @@ public class CameramanManager {
     }
 
     public void ensureTargetSelected() {
-        if (rotationMode && currentTargetId == null && rotationTask != null && !rotationTask.isCancelled()) {
+        if ((rotationMode || mobTargetMode) && currentTargetId == null
+                && rotationTask != null && !rotationTask.isCancelled()) {
             rotationTask.run();
         }
     }
@@ -849,6 +850,7 @@ public class CameramanManager {
         plugin.saveConfig();
 
         checkAndStartRotationTask();
+        if (enabled) ensureTargetSelected();
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
@@ -963,6 +965,7 @@ public class CameramanManager {
         plugin.saveConfig();
 
         checkAndStartRotationTask();
+        if (enabled && rotationTask != null && !rotationTask.isCancelled()) rotationTask.run();
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
