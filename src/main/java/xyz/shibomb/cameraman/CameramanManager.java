@@ -32,6 +32,9 @@ public class CameramanManager {
         ENABLED, DISABLED, RANDOM
     }
 
+    private static final long MAX_DURATION_SECONDS = 86_400L;
+    private static final long MAX_SMOOTH_TELEPORT_SECONDS = 3_600L;
+
     private final JavaPlugin plugin;
     private final Messages messages;
     private final ConfigurationSection config;
@@ -128,21 +131,60 @@ public class CameramanManager {
         loadSettingsFromConfig();
     }
 
+    private static long clampSeconds(long value, long fallback, long maximum) {
+        if (value <= 0L) value = fallback;
+        return Math.min(value, maximum);
+    }
+
+    private static double finiteNonNegative(double value, double fallback) {
+        return Double.isFinite(value) && value >= 0.0 ? value : fallback;
+    }
+
+    private static double finitePositive(double value, double fallback) {
+        return Double.isFinite(value) && value > 0.0 ? value : fallback;
+    }
+
+    private static double clampFinite(double value, double fallback, double minimum, double maximum) {
+        return Double.isFinite(value) ? Math.max(minimum, Math.min(maximum, value)) : fallback;
+    }
+
+    private static double parsePositiveFiniteOrDefault(String value, double fallback) {
+        if (value == null) return fallback;
+        try {
+            double parsed = Double.parseDouble(value);
+            return Double.isFinite(parsed) && parsed > 0.0 ? Math.min(parsed, MAX_DURATION_SECONDS) : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static double parseFiniteOrDefault(String value, double fallback) {
+        if (value == null) return fallback;
+        try {
+            double parsed = Double.parseDouble(value);
+            return Double.isFinite(parsed) ? parsed : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
     private void loadSettingsFromConfig() {
         this.newcomerMode = config.getBoolean("newcomerMode", false);
         this.rotationMode = config.getBoolean("rotationMode", false);
-        long intervalSeconds = config.getLong("rotationInterval", 60L);
+        long intervalSeconds = clampSeconds(config.getLong("rotationInterval", 60L), 60L, MAX_DURATION_SECONDS);
         this.rotationInterval = intervalSeconds * 20L;
-        this.minRotationDistance = config.getDouble("minRotationDistance", 0.0);
+        this.minRotationDistance = finiteNonNegative(config.getDouble("minRotationDistance", 0.0), 0.0);
 
         this.mobTargetMode = config.getBoolean("mobTargetMode", false);
         this.autoMobTarget = config.getBoolean("autoMobTarget", false);
-        this.autoMobTargetDelay = config.getLong("autoMobTargetDelay", 60L);
+        this.autoMobTargetDelay = clampSeconds(config.getLong("autoMobTargetDelay", 60L), 60L,
+                MAX_DURATION_SECONDS);
 
         this.teleportSmooth = config.getBoolean("teleportSmooth", false);
-        this.teleportSmoothDuration = config.getLong("teleportSmoothDuration", 3L);
-        this.teleportSmoothSpeed = config.getDouble("teleportSmoothSpeed", 50.0);
-        this.cameraSmoothing = Math.max(0.01, Math.min(1.0, config.getDouble("cameraSmoothing", 0.35)));
+        this.teleportSmoothDuration = clampSeconds(config.getLong("teleportSmoothDuration", 3L), 3L,
+                MAX_SMOOTH_TELEPORT_SECONDS);
+        this.teleportSmoothSpeed = finitePositive(config.getDouble("teleportSmoothSpeed", 50.0), 50.0);
+        this.cameraSmoothing = clampFinite(config.getDouble("cameraSmoothing", 0.35), 0.35, 0.01, 1.0);
         String configuredEasing = config.getString("cameraEasing", "SMOOTHSTEP");
         this.cameraEasing = configuredEasing != null
                 && List.of("LINEAR", "SMOOTHSTEP", "EASE_IN_OUT").contains(configuredEasing.toUpperCase(Locale.ROOT))
@@ -251,7 +293,9 @@ public class CameramanManager {
 
         if (shouldRun) {
             this.rotationTask = new RotationTask(this);
-            this.rotationTask.runTaskTimer(plugin, 0L, this.rotationInterval);
+            // Defer the first automatic rotation by one configured interval. Initial target
+            // selection is handled immediately when the operator joins/is assigned.
+            this.rotationTask.runTaskTimer(plugin, this.rotationInterval, this.rotationInterval);
         }
     }
 
@@ -797,6 +841,7 @@ public class CameramanManager {
 
     public void setRotationMode(boolean enabled, long intervalSeconds) {
         this.rotationMode = enabled;
+        intervalSeconds = clampSeconds(intervalSeconds, 60L, MAX_DURATION_SECONDS);
 
         config.set("rotationMode", enabled);
         config.set("rotationInterval", intervalSeconds);
@@ -931,7 +976,8 @@ public class CameramanManager {
 
     public void setAutoMobTarget(boolean enabled, long delay) {
         this.autoMobTarget = enabled;
-        this.autoMobTargetDelay = delay;
+        this.autoMobTargetDelay = clampSeconds(delay, 60L, MAX_DURATION_SECONDS);
+        delay = this.autoMobTargetDelay;
         config.set("autoMobTarget", enabled);
         config.set("autoMobTargetDelay", delay);
         plugin.saveConfig();
@@ -972,7 +1018,8 @@ public class CameramanManager {
 
     public void setTeleportSmooth(boolean enabled, long duration) {
         this.teleportSmooth = enabled;
-        this.teleportSmoothDuration = duration;
+        this.teleportSmoothDuration = clampSeconds(duration, 3L, MAX_SMOOTH_TELEPORT_SECONDS);
+        duration = this.teleportSmoothDuration;
         config.set("teleportSmooth", enabled);
         config.set("teleportSmoothDuration", duration);
         plugin.saveConfig();
@@ -1072,7 +1119,7 @@ public class CameramanManager {
     private double getSmoothingFor(SpectatePerspective perspective) {
         if (perspective == SpectatePerspective.DYNAMIC || perspective == SpectatePerspective.DYNAMIC_BEHIND
                 || perspective == SpectatePerspective.DYNAMIC_FRONT || perspective == SpectatePerspective.DYNAMIC_POV) {
-            return Math.max(0.01, Math.min(1.0, Double.parseDouble(dynamicSmoothness)));
+            return clampFinite(parseFiniteOrDefault(dynamicSmoothness, 0.05), 0.05, 0.01, 1.0);
         }
         return cameraSmoothing;
     }
@@ -1157,12 +1204,17 @@ public class CameramanManager {
                 || perspective == SpectatePerspective.DYNAMIC_FRONT || perspective == SpectatePerspective.DYNAMIC_POV) {
             return new DynamicFollowShot(distance, height, perspective);
         } else if (perspective == SpectatePerspective.FLYBY) {
-            double dur = Double.parseDouble(flybyDuration);
+            double dur = parsePositiveFiniteOrDefault(flybyDuration, 30.0);
             return new FlybyShot(dur);
         } else if (perspective == SpectatePerspective.CRANE) {
-            double dur = Double.parseDouble(craneDuration);
-            double min = Double.parseDouble(craneHeightMin);
-            double max = Double.parseDouble(craneHeightMax);
+            double dur = parsePositiveFiniteOrDefault(craneDuration, 30.0);
+            double min = parseFiniteOrDefault(craneHeightMin, 1.0);
+            double max = parseFiniteOrDefault(craneHeightMax, 5.0);
+            if (min > max) {
+                double temp = min;
+                min = max;
+                max = temp;
+            }
             return new CraneShot(dur, min, max, distance);
         } else if (perspective == SpectatePerspective.MOVE) {
             double x = parseAndCalculate(moveX);
@@ -1258,11 +1310,13 @@ public class CameramanManager {
                     min = max;
                     max = temp;
                 }
-                return min + (new Random().nextDouble() * (max - min));
+                double result = min + (new Random().nextDouble() * (max - min));
+                return Double.isFinite(result) ? result : 3.0;
             }
 
             // Not a range, try parsing as single value
-            return Double.parseDouble(value);
+            double parsed = Double.parseDouble(value);
+            return Double.isFinite(parsed) ? parsed : 3.0;
         } catch (NumberFormatException e) {
             // Log warning?
             // plugin.getLogger().warning("Failed to parse value: " + value);
@@ -1281,7 +1335,8 @@ public class CameramanManager {
     }
 
     public void setMinRotationDistance(double distance) {
-        this.minRotationDistance = distance;
+        this.minRotationDistance = finiteNonNegative(distance, 0.0);
+        distance = this.minRotationDistance;
         config.set("minRotationDistance", distance);
         plugin.saveConfig();
 

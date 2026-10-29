@@ -92,6 +92,10 @@ public class RotationTask extends BukkitRunnable {
                 return;
             }
 
+            // Auto-mob mode may keep this task alive as a monitor; it must not rotate players
+            // when the explicit player rotation setting is disabled.
+            if (!manager.isRotationMode()) return;
+
             // Find next valid target
             int attempts = 0;
             while (attempts < targets.size()) {

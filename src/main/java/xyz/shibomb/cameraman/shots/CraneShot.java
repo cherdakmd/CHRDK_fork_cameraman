@@ -7,21 +7,23 @@ import xyz.shibomb.cameraman.targets.CameraTarget;
 
 public class CraneShot implements CameraShot {
 
-    private final double durationTicks;
+    private final long durationTicks;
     private final double minHeight;
     private final double maxHeight;
     private final double distance;
 
     public CraneShot(double durationSeconds, double minHeight, double maxHeight, double distance) {
-        this.durationTicks = durationSeconds * 20;
-        this.minHeight = minHeight;
-        this.maxHeight = maxHeight;
+        this.durationTicks = FlybyShot.toDurationTicks(durationSeconds);
+        double safeMin = Double.isFinite(minHeight) ? minHeight : 1.0;
+        double safeMax = Double.isFinite(maxHeight) ? maxHeight : 5.0;
+        this.minHeight = Math.min(safeMin, safeMax);
+        this.maxHeight = Math.max(safeMin, safeMax);
         this.distance = distance;
     }
 
     @Override
     public Location getNextLocation(Player cameraman, CameraTarget target, long tick) {
-        long cycleTick = (long) (tick % (durationTicks * 2));
+        long cycleTick = tick % (durationTicks * 2L);
         double t;
 
         if (cycleTick < durationTicks) {
@@ -38,7 +40,9 @@ public class CraneShot implements CameraShot {
         double currentHeight = minHeight + ((maxHeight - minHeight) * t);
 
         Location targetLoc = target.getLocation();
-        Vector direction = targetLoc.getDirection().setY(0).normalize();
+        Vector direction = targetLoc.getDirection().setY(0);
+        if (direction.lengthSquared() < 1.0e-12) direction = new Vector(0, 0, 1);
+        else direction.normalize();
 
         // Position: Behind + Height
         Location camLoc = targetLoc.clone().subtract(direction.multiply(distance));
