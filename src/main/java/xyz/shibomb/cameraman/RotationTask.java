@@ -43,7 +43,8 @@ public class RotationTask extends BukkitRunnable {
                 org.bukkit.entity.LivingEntity candidate = mobs.get(currentIndex);
                 currentIndex++; // Always advance index for next time
                 attempts++;
-                if (wasRecentlySelected(candidate.getUniqueId(), mobs.size())) continue;
+                if (candidate.getUniqueId().equals(manager.getCurrentTargetId())
+                        || wasRecentlySelected(candidate.getUniqueId(), mobs.size())) continue;
 
                 // If minDistance is set (> 0), check distance
                 if (minDistance > 0.0) {
@@ -68,11 +69,12 @@ public class RotationTask extends BukkitRunnable {
                 return;
             }
 
-            // If distance or history excluded every candidate, still make progress.
-            org.bukkit.entity.LivingEntity fallback = mobs.get(currentIndex % mobs.size());
+            // Relax history and distance constraints if possible, but never reselect the current target.
+            org.bukkit.entity.LivingEntity fallback = findDifferentTarget(mobs);
+            if (fallback == null) return;
             manager.setTarget(fallback);
             remember(fallback.getUniqueId(), mobs.size());
-            currentIndex++;
+            currentIndex = (mobs.indexOf(fallback) + 1) % mobs.size();
 
         } else {
             List<Player> targets = manager.getPotentialTargets();
@@ -100,7 +102,8 @@ public class RotationTask extends BukkitRunnable {
                 Player candidate = targets.get(currentIndex);
                 currentIndex++;
                 attempts++;
-                if (wasRecentlySelected(candidate.getUniqueId(), targets.size())) continue;
+                if (candidate.getUniqueId().equals(manager.getCurrentTargetId())
+                        || wasRecentlySelected(candidate.getUniqueId(), targets.size())) continue;
 
                 if (minDistance > 0.0) {
                     try {
@@ -120,12 +123,26 @@ public class RotationTask extends BukkitRunnable {
                 return;
             }
 
-            // Fallback if distance or history excluded every candidate.
-            Player fallback = targets.get(currentIndex % targets.size());
+            // Relax history and distance constraints if possible, but never reselect the current target.
+            Player fallback = findDifferentTarget(targets);
+            if (fallback == null) return;
             manager.setTarget(fallback);
             remember(fallback.getUniqueId(), targets.size());
-            currentIndex++;
+            currentIndex = (targets.indexOf(fallback) + 1) % targets.size();
         }
+    }
+
+    private <T extends org.bukkit.entity.Entity> T findDifferentTarget(List<T> candidates) {
+        if (candidates.isEmpty()) return null;
+        UUID currentTargetId = manager.getCurrentTargetId();
+        int start = Math.floorMod(currentIndex, candidates.size());
+        if (currentTargetId == null) return candidates.get(start);
+        if (candidates.size() < 2) return null;
+        for (int offset = 0; offset < candidates.size(); offset++) {
+            T candidate = candidates.get((start + offset) % candidates.size());
+            if (!candidate.getUniqueId().equals(currentTargetId)) return candidate;
+        }
+        return null;
     }
 
     private boolean wasRecentlySelected(UUID id, int availableCount) {

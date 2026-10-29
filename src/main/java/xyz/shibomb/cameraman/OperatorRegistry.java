@@ -130,6 +130,8 @@ public final class OperatorRegistry {
             } else if (manager.isMobTargetMode()) {
                 manager.setMobTargetMode(false);
                 cameraman.sendMessage(manager.getMessages().get("mob-mode-disabled-join"));
+            } else {
+                manager.ensureTargetSelected();
             }
         }
     }

@@ -268,6 +268,7 @@ public class CameramanManager {
         plugin.saveConfig();
         player.setGameMode(GameMode.SPECTATOR);
         player.sendMessage(messages.get("now-cameraman"));
+        ensureTargetSelected();
     }
 
     public Player getCameraman() {
@@ -280,8 +281,18 @@ public class CameramanManager {
         if (cameramanId != null && cameramanId.equals(player.getUniqueId())) {
             player.setGameMode(GameMode.SPECTATOR);
             player.sendMessage(messages.get("welcome-cameraman"));
-
+            ensureTargetSelected();
         }
+    }
+
+    public void ensureTargetSelected() {
+        if (rotationMode && currentTargetId == null && rotationTask != null && !rotationTask.isCancelled()) {
+            rotationTask.run();
+        }
+    }
+
+    public UUID getCurrentTargetId() {
+        return currentTargetId;
     }
 
     public void removeCameraman() {
