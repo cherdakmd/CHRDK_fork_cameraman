@@ -120,7 +120,7 @@ public class CameramanManager {
             }
             if (section.getKeys(false).isEmpty()) {
                 for (String key : plugin.getConfig().getKeys(false)) {
-                    if (List.of("cameraman", "language", "cameraOperators", "operatorSettings", "profiles").contains(key)) {
+                    if (List.of("cameraman", "language", "updateCheck", "cameraOperators", "operatorSettings", "profiles").contains(key)) {
                         continue;
                     }
                     ConfigurationSection nested = plugin.getConfig().getConfigurationSection(key);

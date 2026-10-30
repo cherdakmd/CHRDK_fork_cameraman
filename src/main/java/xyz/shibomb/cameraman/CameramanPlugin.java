@@ -20,6 +20,7 @@ public final class CameramanPlugin extends JavaPlugin {
         getCommand("cameraman").setTabCompleter(cameramanCommand);
         getServer().getPluginManager().registerEvents(new PlayerJoinListener(this.operators), this);
         getServer().getPluginManager().registerEvents(menu, this);
+        new UpdateChecker(this).checkAsync();
     }
 
     @Override
