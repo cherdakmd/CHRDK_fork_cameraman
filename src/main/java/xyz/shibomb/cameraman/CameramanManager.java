@@ -61,6 +61,9 @@ public class CameramanManager {
     private SmoothTeleportTask currentTeleportTask;
     private final CameraRouteStore routeStore;
     private CameraPathTask currentPathTask;
+    private BukkitTask routeRecordingTask;
+    private String routeRecordingName;
+    private final List<Location> routeRecordingPoints = new ArrayList<>();
     private SpectateState spectateMode = SpectateState.ENABLED;
     private SpectatePerspective spectatePerspective = SpectatePerspective.POV;
     private SpectateState mobSpectateMode = SpectateState.ENABLED;
@@ -763,6 +766,53 @@ public class CameramanManager {
         return routeStore.pointCount(name);
     }
 
+    public boolean startCameraRouteRecording(String name, long intervalTicks) {
+        if (!InputValidators.isValidProfileName(name) || intervalTicks < 1 || intervalTicks > 1200
+                || routeRecordingTask != null && !routeRecordingTask.isCancelled() || getCameraman() == null) {
+            return false;
+        }
+        stopFollowing();
+        stopPathPlayback();
+        currentTargetId = null;
+        Player cameraOperator = getCameraman();
+        if (cameraOperator != null) cameraOperator.setSpectatorTarget(null);
+        routeRecordingName = name;
+        routeRecordingPoints.clear();
+        routeRecordingTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            Player operator = getCameraman();
+            if (operator == null || !operator.isValid() || routeRecordingPoints.size() >= 1000) {
+                stopCameraRouteRecording();
+                return;
+            }
+            Location current = operator.getLocation();
+            if (routeRecordingPoints.isEmpty() || shouldRecordRoutePoint(routeRecordingPoints.get(routeRecordingPoints.size() - 1), current)) {
+                routeRecordingPoints.add(current.clone());
+            }
+        }, 0L, intervalTicks);
+        return true;
+    }
+
+    private static boolean shouldRecordRoutePoint(Location previous, Location current) {
+        if (previous.getWorld() != current.getWorld()) return true;
+        float yawDifference = Math.abs((previous.getYaw() - current.getYaw() + 540.0F) % 360.0F - 180.0F);
+        return previous.distanceSquared(current) >= 0.0625
+                || yawDifference >= 3.0F || Math.abs(previous.getPitch() - current.getPitch()) >= 3.0F;
+    }
+
+    public boolean stopCameraRouteRecording() {
+        if (routeRecordingTask == null) return false;
+        routeRecordingTask.cancel();
+        routeRecordingTask = null;
+        boolean saved = routeRecordingPoints.size() >= 2 && routeStore.addPoints(routeRecordingName, routeRecordingPoints);
+        routeRecordingPoints.clear();
+        routeRecordingName = null;
+        return saved;
+    }
+
+    public boolean isRecordingCameraRoute() {
+        return routeRecordingTask != null && !routeRecordingTask.isCancelled();
+    }
+
     public boolean addCameraRoutePoint(String name) {
         Player cameraman = getCameraman();
         return cameraman != null && routeStore.addPoint(name, cameraman.getLocation());
@@ -803,6 +853,7 @@ public class CameramanManager {
     private boolean playCameraPath(List<Location> points, long ticksPerSegment) {
         Player cameraman = getCameraman();
         if (cameraman == null || points.size() < 2) return false;
+        stopCameraRouteRecording();
         stopFollowing();
         stopPathPlayback();
         currentTargetId = null;
@@ -950,6 +1001,7 @@ public class CameramanManager {
     }
 
     public void stopAllTasks() {
+        stopCameraRouteRecording();
         stopRotationTask();
         if (cameraHudTask != null) {
             cameraHudTask.cancel();

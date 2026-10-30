@@ -32,16 +32,24 @@ public final class CameraRouteStore {
     }
 
     public boolean addPoint(String name, Location location) {
-        if (!validName(name) || location == null || location.getWorld() == null) return false;
+        return addPoints(name, location == null ? List.of() : List.of(location));
+    }
+
+    public boolean addPoints(String name, List<Location> locations) {
+        if (!validName(name) || locations == null || locations.isEmpty()) return false;
         List<Map<?, ?>> points = new ArrayList<>(routes.getMapList(routePath(name)));
-        Map<String, Object> point = new LinkedHashMap<>();
-        point.put("world", location.getWorld().getName());
-        point.put("x", location.getX());
-        point.put("y", location.getY());
-        point.put("z", location.getZ());
-        point.put("yaw", location.getYaw());
-        point.put("pitch", location.getPitch());
-        points.add(point);
+        for (Location location : locations) {
+            if (location == null || location.getWorld() == null) continue;
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("world", location.getWorld().getName());
+            point.put("x", location.getX());
+            point.put("y", location.getY());
+            point.put("z", location.getZ());
+            point.put("yaw", location.getYaw());
+            point.put("pitch", location.getPitch());
+            points.add(point);
+        }
+        if (points.isEmpty()) return false;
         routes.set(routePath(name), points);
         return save();
     }
