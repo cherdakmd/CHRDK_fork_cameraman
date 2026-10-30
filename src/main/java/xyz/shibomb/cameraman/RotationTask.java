@@ -20,6 +20,7 @@ public class RotationTask extends BukkitRunnable {
 
     @Override
     public void run() {
+        manager.markRotationTick();
         Player cameraman = manager.getCameraman();
         if (cameraman == null || !cameraman.isOnline() || manager.isCameraPaused())
             return;

@@ -65,7 +65,9 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
             Map.entry("траектория", "path"),
             Map.entry("сцена", "scene"),
             Map.entry("пауза", "pause"),
-            Map.entry("дальше", "next"));
+            Map.entry("дальше", "next"),
+            Map.entry("статус", "status"),
+            Map.entry("инфоэкран", "hud"));
 
     private static String normalizeSubCommand(String input) {
         String normalized = input.toLowerCase(Locale.ROOT);
@@ -88,7 +90,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     "mobnightvision", "showmessage", "nightvisionthreshold", "distance", "height",
                     "orbitspeed", "orbitdirection", "smoothness", "flybyduration", "craneduration",
                     "craneheightmin", "craneheightmax", "random", "scenic", "autoscenic", "movespeed",
-                    "movedirection", "menu", "profile", "operators", "path", "scene", "pause", "next"));
+                    "movedirection", "menu", "profile", "operators", "path", "scene", "pause", "next", "status", "hud"));
             subcommands.addAll(RUSSIAN_SUBCOMMANDS.keySet());
             return matching(subcommands, args[0]);
         }
@@ -132,7 +134,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         }
 
         if (argumentIndex == 1) {
-            if (List.of("newcomer", "mobtarget", "automob", "teleportsmooth", "mobnightvision", "showmessage")
+            if (List.of("newcomer", "mobtarget", "automob", "teleportsmooth", "mobnightvision", "showmessage", "hud")
                     .contains(subcommand)) {
                 return matching(List.of("true", "false"), current);
             }
@@ -234,6 +236,23 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(messages.get("menu-player-only"));
                 }
                 break;
+
+            case "status":
+                sender.sendMessage(manager.getCameraStatusMessage());
+                manager.getCameraDiagnostics().forEach(sender::sendMessage);
+                break;
+
+            case "hud": {
+                if (args.length < 2) {
+                    sender.sendMessage(messages.get("usage-hud"));
+                    return true;
+                }
+                Boolean enabled = parseBooleanArgument(sender, args[1]);
+                if (enabled == null) return true;
+                manager.setCameraHud(enabled);
+                sender.sendMessage(messages.get("camera-hud-toggle", enabled));
+                break;
+            }
 
             case "path": {
                 if (args.length < 2) {

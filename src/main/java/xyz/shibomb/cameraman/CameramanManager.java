@@ -56,6 +56,8 @@ public class CameramanManager {
     private String cameraEasing = "SMOOTHSTEP";
     private boolean cameraHud = true;
     private boolean cameraPaused;
+    private BukkitTask cameraHudTask;
+    private long nextRotationAtMillis;
     private SmoothTeleportTask currentTeleportTask;
     private final CameraRouteStore routeStore;
     private CameraPathTask currentPathTask;
@@ -237,6 +239,7 @@ public class CameramanManager {
         loadRandomPerspectives();
 
         checkAndStartRotationTask();
+        restartCameraHudTask();
     }
 
     private SpectateState parseSpectateState(String value) {
@@ -288,14 +291,90 @@ public class CameramanManager {
     private void checkAndStartRotationTask() {
         boolean shouldRun = rotationMode || mobTargetMode || autoMobTarget;
 
-        // Always stop the existing task to ensure we use the latest interval/settings
+        // Always stop the existing task to ensure we use the latest interval/settings.
         stopRotationTask();
+        nextRotationAtMillis = 0L;
 
         if (shouldRun) {
             this.rotationTask = new RotationTask(this);
-            // Defer the first automatic rotation by one configured interval. Initial target
-            // selection is handled immediately when the operator joins/is assigned.
+            // Initial target selection is triggered immediately when the operator joins/is assigned.
+            this.nextRotationAtMillis = System.currentTimeMillis() + rotationInterval * 50L;
             this.rotationTask.runTaskTimer(plugin, this.rotationInterval, this.rotationInterval);
+        }
+    }
+
+    private void restartCameraHudTask() {
+        if (cameraHudTask != null) {
+            cameraHudTask.cancel();
+            cameraHudTask = null;
+        }
+        if (!cameraHud) return;
+        cameraHudTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            Player cameraman = getCameraman();
+            if (cameraman != null && cameraman.isOnline() && cameraman.getGameMode() == GameMode.SPECTATOR) {
+                cameraman.sendActionBar(net.kyori.adventure.text.Component.text(getCameraStatusMessage()));
+            }
+        }, 20L, 20L);
+    }
+
+    private String cameraActivityLabel() {
+        if (cameraPaused) return messages.get("camera-state-paused");
+        if (currentPathTask != null && !currentPathTask.isCancelled()) return messages.get("camera-state-path");
+        if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) return messages.get("camera-state-moving");
+        if (currentSpectateTask != null && !currentSpectateTask.isCancelled()) return messages.get("camera-state-following");
+        Player cameraman = getCameraman();
+        if (cameraman != null && cameraman.getSpectatorTarget() != null) return messages.get("camera-state-following");
+        if (currentTargetId != null) return messages.get("camera-state-positioned");
+        return messages.get("camera-state-idle");
+    }
+
+    public String getCameraStatusMessage() {
+        String targetName = getCurrentTargetDisplayName();
+        if (targetName == null) targetName = messages.get("camera-target-none");
+        boolean rotating = rotationMode || mobTargetMode;
+        String rotationLabel = messages.get(rotating ? "camera-status-enabled" : "camera-status-disabled");
+        String nextChange = "—";
+        if (rotating) {
+            long remaining = Math.max(0L, nextRotationAtMillis - System.currentTimeMillis());
+            nextChange = Long.toString((remaining + 999L) / 1000L);
+        }
+        int targetCount = mobTargetMode ? getPotentialMobTargets().size() : getPotentialTargets().size();
+        return messages.get("camera-status-hud", targetName, rotationLabel, nextChange, targetCount,
+                cameraActivityLabel());
+    }
+
+    public List<String> getCameraDiagnostics() {
+        List<String> diagnostics = new ArrayList<>();
+        Player cameraman = getCameraman();
+        if (cameraman == null || !cameraman.isOnline()) {
+            diagnostics.add(messages.get("camera-diagnostic-no-operator"));
+            return diagnostics;
+        }
+        if (cameraman.getGameMode() != GameMode.SPECTATOR) {
+            diagnostics.add(messages.get("camera-diagnostic-not-spectator"));
+        }
+        if (cameraPaused) diagnostics.add(messages.get("camera-diagnostic-paused"));
+        boolean pathActive = currentPathTask != null && !currentPathTask.isCancelled();
+        boolean spectateActive = currentSpectateTask != null && !currentSpectateTask.isCancelled();
+        if (currentTargetId == null && !pathActive && !spectateActive) {
+            diagnostics.add(messages.get("camera-diagnostic-no-current-target"));
+        }
+        List<?> targets = mobTargetMode ? getPotentialMobTargets() : getPotentialTargets();
+        if (targets.isEmpty()) {
+            diagnostics.add(messages.get(mobTargetMode ? "camera-diagnostic-no-mobs" : "camera-diagnostic-no-players"));
+        } else if (targets.size() == 1 && (rotationMode || mobTargetMode)) {
+            diagnostics.add(messages.get("camera-diagnostic-one-target"));
+        }
+        if (!rotationMode && !mobTargetMode) {
+            diagnostics.add(messages.get("camera-diagnostic-rotation-off"));
+        }
+        if (diagnostics.isEmpty()) diagnostics.add(messages.get("camera-diagnostic-ok"));
+        return diagnostics;
+    }
+
+    void markRotationTick() {
+        if (rotationMode || mobTargetMode) {
+            nextRotationAtMillis = System.currentTimeMillis() + rotationInterval * 50L;
         }
     }
 
@@ -702,8 +781,7 @@ public class CameramanManager {
     }
 
     public boolean playCameraRoute(String name, long ticksPerSegment) {
-        return playCameraPath(routeStore.points(name), ticksPerSegment,
-                cameraHud ? messages.get("camera-path-hud", name) : null);
+        return playCameraPath(routeStore.points(name), ticksPerSegment);
     }
 
     public List<String> getCameraSceneNames() {
@@ -719,18 +797,18 @@ public class CameramanManager {
     }
 
     public boolean playCameraScene(String name, long ticksPerSegment) {
-        return playCameraPath(routeStore.scenePoints(name), ticksPerSegment,
-                cameraHud ? messages.get("camera-scene-hud", name) : null);
+        return playCameraPath(routeStore.scenePoints(name), ticksPerSegment);
     }
 
-    private boolean playCameraPath(List<Location> points, long ticksPerSegment, String hudMessage) {
+    private boolean playCameraPath(List<Location> points, long ticksPerSegment) {
         Player cameraman = getCameraman();
         if (cameraman == null || points.size() < 2) return false;
         stopFollowing();
         stopPathPlayback();
+        currentTargetId = null;
         cameraman.setSpectatorTarget(null);
         currentPathTask = new CameraPathTask(cameraman, points, ticksPerSegment, cameraEasing,
-                this::isCameraPaused, hudMessage);
+                this::isCameraPaused);
         currentPathTask.runTaskTimer(plugin, 0L, 1L);
         return true;
     }
@@ -836,6 +914,13 @@ public class CameramanManager {
         return cameraHud;
     }
 
+    public void setCameraHud(boolean enabled) {
+        cameraHud = enabled;
+        config.set("cameraHud", enabled);
+        plugin.saveConfig();
+        restartCameraHudTask();
+    }
+
     public String getCameraEasing() {
         return cameraEasing;
     }
@@ -866,6 +951,10 @@ public class CameramanManager {
 
     public void stopAllTasks() {
         stopRotationTask();
+        if (cameraHudTask != null) {
+            cameraHudTask.cancel();
+            cameraHudTask = null;
+        }
         stopLightCheckTask();
         stopSpectateTask();
         if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
@@ -1113,8 +1202,7 @@ public class CameramanManager {
         if (target == null || !target.isValid()) return;
 
         stopSpectateTask();
-        String hudMessage = cameraHud ? messages.get("camera-hud", target.getName(), perspective.name()) : null;
-        currentSpectateTask = new SpectateTask(cameraman, target, shot, getSmoothingFor(perspective), hudMessage,
+        currentSpectateTask = new SpectateTask(cameraman, target, shot, getSmoothingFor(perspective),
                 this::isCameraPaused);
         currentSpectateTask.runTaskTimer(plugin, 0L, 1L);
     }
@@ -1164,9 +1252,8 @@ public class CameramanManager {
         stopFollowing();
 
         LocationTarget sceneTarget = new LocationTarget(startLocation);
-        String hudMessage = cameraHud ? messages.get("camera-hud", sceneTarget.getName(), actualPerspective.name()) : null;
         currentSpectateTask = new SpectateTask(cameraman, sceneTarget, shot,
-                getSmoothingFor(actualPerspective), hudMessage, this::isCameraPaused);
+                getSmoothingFor(actualPerspective), this::isCameraPaused);
         // Execute immediately to prevent 1-tick jitter
         currentSpectateTask.run();
         // Schedule subsequent runs starting from next tick
