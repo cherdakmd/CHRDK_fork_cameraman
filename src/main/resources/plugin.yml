@@ -1,6 +1,7 @@
 name: Cameraman
 version: '${project.version}'
 main: xyz.shibomb.cameraman.CameramanPlugin
+website: https://github.com/cherdakmd/CHRDK_fork_cameraman
 api-version: '26.3'
 commands:
   cameraman:

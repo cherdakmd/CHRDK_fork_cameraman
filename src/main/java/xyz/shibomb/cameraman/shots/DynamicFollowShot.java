@@ -25,7 +25,9 @@ public class DynamicFollowShot implements CameraShot {
     @Override
     public Location getNextLocation(Player cameraman, CameraTarget target, long tick) {
         Location targetLoc = target.getLocation();
-        Vector direction = targetLoc.getDirection().setY(0).normalize();
+        Vector direction = targetLoc.getDirection().setY(0);
+        if (direction.lengthSquared() < 1.0e-12) direction = new Vector(0, 0, 1);
+        else direction.normalize();
         Location idealLoc;
 
         if (perspective == SpectatePerspective.DYNAMIC_FRONT || perspective == SpectatePerspective.FRONT) {

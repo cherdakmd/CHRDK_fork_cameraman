@@ -1,18 +1,23 @@
 package xyz.shibomb.cameraman;
 
-import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
-
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitRunnable;
+
+/** Chooses eligible targets with distance weighting and short-term repeat avoidance. */
 public class RotationTask extends BukkitRunnable {
+
+    private static final double OTHER_WORLD_DISTANCE_WEIGHT = 256.0;
 
     private final CameramanManager manager;
     private final Deque<UUID> recentTargets = new ArrayDeque<>();
-    private int currentIndex = 0;
 
     public RotationTask(CameramanManager manager) {
         this.manager = manager;
@@ -20,116 +25,99 @@ public class RotationTask extends BukkitRunnable {
 
     @Override
     public void run() {
+        manager.markRotationTick();
         Player cameraman = manager.getCameraman();
-        if (cameraman == null || !cameraman.isOnline() || manager.isCameraPaused())
-            return;
-
-        double minDistance = manager.getMinRotationDistance();
+        if (cameraman == null || !cameraman.isOnline() || manager.isCameraPaused()) return;
 
         if (manager.isMobTargetMode()) {
             List<org.bukkit.entity.LivingEntity> mobs = manager.getPotentialMobTargets();
-            if (mobs.isEmpty()) {
-                return;
-            }
+            selectAndSet(mobs, cameraman);
+            return;
+        }
 
-            // Find next valid target
-            int attempts = 0;
-            // Loop at most mobs.size() times to find a valid target
-            while (attempts < mobs.size()) {
-                if (currentIndex >= mobs.size()) {
-                    currentIndex = 0;
-                }
+        List<Player> targets = manager.getPotentialTargets();
+        if (targets.isEmpty()) {
+            switchToMobModeIfDue();
+            return;
+        }
 
-                org.bukkit.entity.LivingEntity candidate = mobs.get(currentIndex);
-                currentIndex++; // Always advance index for next time
-                attempts++;
-                if (wasRecentlySelected(candidate.getUniqueId(), mobs.size())) continue;
+        // Auto-mob mode can keep this task alive as an inactivity monitor, but does not
+        // imply that player rotation itself is enabled.
+        if (!manager.isRotationMode()) return;
+        selectAndSet(targets, cameraman);
+    }
 
-                // If minDistance is set (> 0), check distance
-                if (minDistance > 0.0) {
-                    try {
-                        // Check world first
-                        if (cameraman.getWorld().equals(candidate.getWorld())) {
-                            if (cameraman.getLocation().distance(candidate.getLocation()) < minDistance) {
-                                // Too close, skip
-                                continue;
-                            }
-                        }
-                        // If different worlds, distance check is N/A (or effectively infinite), so
-                        // valid.
-                    } catch (IllegalArgumentException e) {
-                        // Different worlds
-                    }
-                }
+    private void switchToMobModeIfDue() {
+        if (!manager.isAutoMobTarget()) return;
+        long inactiveMillis = System.currentTimeMillis() - manager.getLastPlayerTargetTime();
+        if (inactiveMillis < manager.getAutoMobTargetDelay() * 1_000L) return;
 
-                // Found valid target
-                manager.setTarget(candidate);
-                remember(candidate.getUniqueId(), mobs.size());
-                return;
-            }
-
-            // If distance or history excluded every candidate, still make progress.
-            org.bukkit.entity.LivingEntity fallback = mobs.get(currentIndex % mobs.size());
-            manager.setTarget(fallback);
-            remember(fallback.getUniqueId(), mobs.size());
-            currentIndex++;
-
-        } else {
-            List<Player> targets = manager.getPotentialTargets();
-            if (targets.isEmpty()) {
-                if (manager.isAutoMobTarget()) {
-                    long timeSinceLastPlayer = System.currentTimeMillis() - manager.getLastPlayerTargetTime();
-                    if (timeSinceLastPlayer > manager.getAutoMobTargetDelay() * 1000) {
-                        manager.setMobTargetMode(true);
-                        if (manager.getCameraman() != null) {
-                            manager.sendInfoMessage(manager.getCameraman(),
-                                    manager.getMessages().get("auto-switched-mob-target"));
-                        }
-                    }
-                }
-                return;
-            }
-
-            // Find next valid target
-            int attempts = 0;
-            while (attempts < targets.size()) {
-                if (currentIndex >= targets.size()) {
-                    currentIndex = 0;
-                }
-
-                Player candidate = targets.get(currentIndex);
-                currentIndex++;
-                attempts++;
-                if (wasRecentlySelected(candidate.getUniqueId(), targets.size())) continue;
-
-                if (minDistance > 0.0) {
-                    try {
-                        if (cameraman.getWorld().equals(candidate.getWorld())) {
-                            if (cameraman.getLocation().distance(candidate.getLocation()) < minDistance) {
-                                // Too close
-                                continue;
-                            }
-                        }
-                    } catch (IllegalArgumentException e) {
-                        // Different worlds
-                    }
-                }
-
-                manager.setTarget(candidate);
-                remember(candidate.getUniqueId(), targets.size());
-                return;
-            }
-
-            // Fallback if distance or history excluded every candidate.
-            Player fallback = targets.get(currentIndex % targets.size());
-            manager.setTarget(fallback);
-            remember(fallback.getUniqueId(), targets.size());
-            currentIndex++;
+        manager.setMobTargetMode(true);
+        Player cameraman = manager.getCameraman();
+        if (cameraman != null) {
+            manager.sendInfoMessage(cameraman, manager.getMessages().get("auto-switched-mob-target"));
         }
     }
 
-    private boolean wasRecentlySelected(UUID id, int availableCount) {
-        return availableCount > 1 && recentTargets.contains(id);
+    private <T extends Entity> void selectAndSet(List<T> targets, Player cameraman) {
+        T selected = selectWeightedTarget(targets, cameraman, manager.getMinRotationDistance());
+        if (selected == null) return;
+        manager.setTarget(selected);
+        remember(selected.getUniqueId(), targets.size());
+    }
+
+    private <T extends Entity> T selectWeightedTarget(List<T> targets, Player cameraman, double minDistance) {
+        if (targets.isEmpty()) return null;
+
+        List<T> eligible = candidates(targets, cameraman, minDistance, true, true);
+        if (eligible.isEmpty()) {
+            // If recent history or distance constraints leave no alternative, relax history first,
+            // then the minimum distance; never reselect the current target when another exists.
+            eligible = candidates(targets, cameraman, minDistance, false, true);
+        }
+        if (eligible.isEmpty()) {
+            eligible = candidates(targets, cameraman, minDistance, false, false);
+        }
+        if (eligible.isEmpty()) return null;
+
+        double totalWeight = 0.0;
+        for (T candidate : eligible) totalWeight += weightFor(candidate, cameraman);
+        double choice = ThreadLocalRandom.current().nextDouble(totalWeight);
+        for (T candidate : eligible) {
+            choice -= weightFor(candidate, cameraman);
+            if (choice < 0.0) return candidate;
+        }
+        return eligible.get(eligible.size() - 1);
+    }
+
+    private <T extends Entity> List<T> candidates(List<T> targets, Player cameraman, double minDistance,
+            boolean excludeRecent, boolean enforceMinDistance) {
+        List<T> eligible = new ArrayList<>();
+        UUID currentTargetId = manager.getCurrentTargetId();
+        for (T target : targets) {
+            UUID targetId = target.getUniqueId();
+            if (targetId.equals(currentTargetId)) continue;
+            if (excludeRecent && targets.size() > 1 && recentTargets.contains(targetId)) continue;
+            if (enforceMinDistance && minDistance > 0.0
+                    && target.getWorld().equals(cameraman.getWorld())
+                    && cameraman.getLocation().distance(target.getLocation()) < minDistance) {
+                continue;
+            }
+            eligible.add(target);
+        }
+        return eligible;
+    }
+
+    private double weightFor(Entity target, Player cameraman) {
+        double distance = target.getWorld().equals(cameraman.getWorld())
+                ? cameraman.getLocation().distance(target.getLocation())
+                : OTHER_WORLD_DISTANCE_WEIGHT;
+        return distanceWeight(distance);
+    }
+
+    static double distanceWeight(double distance) {
+        if (!Double.isFinite(distance)) distance = OTHER_WORLD_DISTANCE_WEIGHT;
+        return 1.0 / (1.0 + Math.max(0.0, distance));
     }
 
     private void remember(UUID id, int availableCount) {

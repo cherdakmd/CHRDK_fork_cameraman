@@ -15,17 +15,15 @@ public class SpectateTask extends BukkitRunnable {
     private final CameraTarget target;
     private final CameraShot cameraShot;
     private final double smoothing;
-    private final String hudMessage;
     private final BooleanSupplier paused;
     private long tick;
 
     public SpectateTask(Player cameraman, CameraTarget target, CameraShot cameraShot, double smoothing,
-            String hudMessage, BooleanSupplier paused) {
+            BooleanSupplier paused) {
         this.cameraman = cameraman;
         this.target = target;
         this.cameraShot = cameraShot;
         this.smoothing = Math.max(0.01, Math.min(1.0, smoothing));
-        this.hudMessage = hudMessage;
         this.paused = paused;
     }
 
@@ -42,8 +40,5 @@ public class SpectateTask extends BukkitRunnable {
         Location current = cameraman.getLocation();
         Location interpolated = CameraInterpolation.lerp(current, desired, smoothing);
         cameraman.teleport(CameraInterpolation.avoidSolidBlocks(cameraman, interpolated));
-        if (hudMessage != null && tick % 20L == 1L) {
-            cameraman.sendActionBar(net.kyori.adventure.text.Component.text(hudMessage));
-        }
     }
 }

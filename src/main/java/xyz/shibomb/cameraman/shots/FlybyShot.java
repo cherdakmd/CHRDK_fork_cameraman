@@ -2,8 +2,6 @@ package xyz.shibomb.cameraman.shots;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
-import org.bukkit.Location;
-import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 import xyz.shibomb.cameraman.targets.CameraTarget;
 
@@ -18,7 +16,7 @@ public class FlybyShot implements CameraShot {
     private final Vector endOffset;
 
     public FlybyShot(double durationSeconds) {
-        this.durationTicks = (long) (durationSeconds * 20);
+        this.durationTicks = toDurationTicks(durationSeconds);
         // Hardcoded offsets for now, could be passed in
         // Start: Front-Left, Low
         this.startOffset = new Vector(3, 1, 3);
@@ -28,9 +26,15 @@ public class FlybyShot implements CameraShot {
 
     // Allow custom offsets
     public FlybyShot(double durationSeconds, Vector startOffset, Vector endOffset) {
-        this.durationTicks = (long) (durationSeconds * 20);
+        this.durationTicks = toDurationTicks(durationSeconds);
         this.startOffset = startOffset;
         this.endOffset = endOffset;
+    }
+
+
+    static long toDurationTicks(double durationSeconds) {
+        if (!Double.isFinite(durationSeconds) || durationSeconds <= 0.0) return 1L;
+        return Math.max(1L, Math.min(1_728_000L, Math.round(durationSeconds * 20.0)));
     }
 
     @Override
@@ -56,8 +60,10 @@ public class FlybyShot implements CameraShot {
         // But for a simple Flyby, maybe just World offsets + Target Position is enough?
         // Let's try Relative to View Direction.
 
-        Vector direction = targetLoc.getDirection().setY(0).normalize();
-        Vector right = direction.clone().crossProduct(new Vector(0, 1, 0)).normalize();
+        Vector direction = targetLoc.getDirection().setY(0);
+        if (direction.lengthSquared() < 1.0e-12) direction = new Vector(0, 0, 1);
+        else direction.normalize();
+        Vector right = new Vector(0, 1, 0).crossProduct(direction).normalize();
 
         // Calculate World Vector for Start Offset
         // x is right, z is backward (standard Minecraft direction usually z is forward,

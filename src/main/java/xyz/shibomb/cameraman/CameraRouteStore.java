@@ -32,16 +32,24 @@ public final class CameraRouteStore {
     }
 
     public boolean addPoint(String name, Location location) {
-        if (!validName(name) || location == null || location.getWorld() == null) return false;
+        return addPoints(name, location == null ? List.of() : List.of(location));
+    }
+
+    public boolean addPoints(String name, List<Location> locations) {
+        if (!validName(name) || locations == null || locations.isEmpty()) return false;
         List<Map<?, ?>> points = new ArrayList<>(routes.getMapList(routePath(name)));
-        Map<String, Object> point = new LinkedHashMap<>();
-        point.put("world", location.getWorld().getName());
-        point.put("x", location.getX());
-        point.put("y", location.getY());
-        point.put("z", location.getZ());
-        point.put("yaw", location.getYaw());
-        point.put("pitch", location.getPitch());
-        points.add(point);
+        for (Location location : locations) {
+            if (location == null || location.getWorld() == null) continue;
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("world", location.getWorld().getName());
+            point.put("x", location.getX());
+            point.put("y", location.getY());
+            point.put("z", location.getZ());
+            point.put("yaw", location.getYaw());
+            point.put("pitch", location.getPitch());
+            points.add(point);
+        }
+        if (points.isEmpty()) return false;
         routes.set(routePath(name), points);
         return save();
     }
@@ -57,10 +65,12 @@ public final class CameraRouteStore {
         for (Map<?, ?> point : routes.getMapList(routePath(name))) {
             Object worldValue = point.get("world");
             World world = worldValue instanceof String worldName ? Bukkit.getWorld(worldName) : null;
-            if (world == null) continue;
-            result.add(new Location(world,
-                    number(point.get("x")), number(point.get("y")), number(point.get("z")),
-                    (float) number(point.get("yaw")), (float) number(point.get("pitch"))));
+            Double x = finiteNumber(point.get("x"));
+            Double y = finiteNumber(point.get("y"));
+            Double z = finiteNumber(point.get("z"));
+            if (world == null || !validCoordinates(x, y, z)) continue;
+            result.add(new Location(world, x, y, z,
+                    safeYaw(point.get("yaw")), safePitch(point.get("pitch"))));
         }
         return List.copyOf(result);
     }
@@ -95,18 +105,19 @@ public final class CameraRouteStore {
         List<Map<?, ?>> rawPoints = imported.getMapList("points");
         List<Map<String, Object>> validPoints = new ArrayList<>();
         for (Map<?, ?> point : rawPoints) {
-            if (point.get("world") instanceof String worldName && !worldName.isBlank()
-                    && point.get("x") instanceof Number && point.get("y") instanceof Number
-                    && point.get("z") instanceof Number) {
-                Map<String, Object> normalized = new LinkedHashMap<>();
-                normalized.put("world", worldName);
-                normalized.put("x", number(point.get("x")));
-                normalized.put("y", number(point.get("y")));
-                normalized.put("z", number(point.get("z")));
-                normalized.put("yaw", number(point.get("yaw")));
-                normalized.put("pitch", number(point.get("pitch")));
-                validPoints.add(normalized);
-            }
+            if (!(point.get("world") instanceof String worldName) || worldName.isBlank()) continue;
+            Double x = finiteNumber(point.get("x"));
+            Double y = finiteNumber(point.get("y"));
+            Double z = finiteNumber(point.get("z"));
+            if (!validCoordinates(x, y, z)) continue;
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            normalized.put("world", worldName);
+            normalized.put("x", x);
+            normalized.put("y", y);
+            normalized.put("z", z);
+            normalized.put("yaw", safeYaw(point.get("yaw")));
+            normalized.put("pitch", safePitch(point.get("pitch")));
+            validPoints.add(normalized);
         }
         if (validPoints.size() < 2) return false;
         routes.set(routePath(name), validPoints);
@@ -172,7 +183,26 @@ public final class CameraRouteStore {
         return "routes." + name + ".points";
     }
 
-    private static double number(Object value) {
-        return value instanceof Number number ? number.doubleValue() : 0.0;
+    private static Double finiteNumber(Object value) {
+        if (!(value instanceof Number number)) return null;
+        double result = number.doubleValue();
+        return Double.isFinite(result) ? result : null;
+    }
+
+    private static boolean validCoordinates(Double x, Double y, Double z) {
+        return x != null && y != null && z != null
+                && Math.abs(x) <= 30_000_000.0
+                && Math.abs(z) <= 30_000_000.0
+                && y >= -2048.0 && y <= 4096.0;
+    }
+
+    private static float safeYaw(Object value) {
+        Double number = finiteNumber(value);
+        return number == null ? 0.0F : (float) (number % 360.0);
+    }
+
+    private static float safePitch(Object value) {
+        Double number = finiteNumber(value);
+        return number == null ? 0.0F : (float) Math.max(-90.0, Math.min(90.0, number));
     }
 }

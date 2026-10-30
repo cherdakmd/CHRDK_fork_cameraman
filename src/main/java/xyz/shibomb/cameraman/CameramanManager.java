@@ -32,6 +32,9 @@ public class CameramanManager {
         ENABLED, DISABLED, RANDOM
     }
 
+    private static final long MAX_DURATION_SECONDS = 86_400L;
+    private static final long MAX_SMOOTH_TELEPORT_SECONDS = 3_600L;
+
     private final JavaPlugin plugin;
     private final Messages messages;
     private final ConfigurationSection config;
@@ -53,9 +56,14 @@ public class CameramanManager {
     private String cameraEasing = "SMOOTHSTEP";
     private boolean cameraHud = true;
     private boolean cameraPaused;
+    private BukkitTask cameraHudTask;
+    private long nextRotationAtMillis;
     private SmoothTeleportTask currentTeleportTask;
     private final CameraRouteStore routeStore;
     private CameraPathTask currentPathTask;
+    private BukkitTask routeRecordingTask;
+    private String routeRecordingName;
+    private final List<Location> routeRecordingPoints = new ArrayList<>();
     private SpectateState spectateMode = SpectateState.ENABLED;
     private SpectatePerspective spectatePerspective = SpectatePerspective.POV;
     private SpectateState mobSpectateMode = SpectateState.ENABLED;
@@ -115,7 +123,7 @@ public class CameramanManager {
             }
             if (section.getKeys(false).isEmpty()) {
                 for (String key : plugin.getConfig().getKeys(false)) {
-                    if (List.of("cameraman", "language", "cameraOperators", "operatorSettings", "profiles").contains(key)) {
+                    if (List.of("cameraman", "language", "updateCheck", "cameraOperators", "operatorSettings", "profiles").contains(key)) {
                         continue;
                     }
                     ConfigurationSection nested = plugin.getConfig().getConfigurationSection(key);
@@ -128,21 +136,60 @@ public class CameramanManager {
         loadSettingsFromConfig();
     }
 
+    private static long clampSeconds(long value, long fallback, long maximum) {
+        if (value <= 0L) value = fallback;
+        return Math.min(value, maximum);
+    }
+
+    private static double finiteNonNegative(double value, double fallback) {
+        return Double.isFinite(value) && value >= 0.0 ? value : fallback;
+    }
+
+    private static double finitePositive(double value, double fallback) {
+        return Double.isFinite(value) && value > 0.0 ? value : fallback;
+    }
+
+    private static double clampFinite(double value, double fallback, double minimum, double maximum) {
+        return Double.isFinite(value) ? Math.max(minimum, Math.min(maximum, value)) : fallback;
+    }
+
+    private static double parsePositiveFiniteOrDefault(String value, double fallback) {
+        if (value == null) return fallback;
+        try {
+            double parsed = Double.parseDouble(value);
+            return Double.isFinite(parsed) && parsed > 0.0 ? Math.min(parsed, MAX_DURATION_SECONDS) : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static double parseFiniteOrDefault(String value, double fallback) {
+        if (value == null) return fallback;
+        try {
+            double parsed = Double.parseDouble(value);
+            return Double.isFinite(parsed) ? parsed : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
     private void loadSettingsFromConfig() {
         this.newcomerMode = config.getBoolean("newcomerMode", false);
         this.rotationMode = config.getBoolean("rotationMode", false);
-        long intervalSeconds = config.getLong("rotationInterval", 60L);
+        long intervalSeconds = clampSeconds(config.getLong("rotationInterval", 60L), 60L, MAX_DURATION_SECONDS);
         this.rotationInterval = intervalSeconds * 20L;
-        this.minRotationDistance = config.getDouble("minRotationDistance", 0.0);
+        this.minRotationDistance = finiteNonNegative(config.getDouble("minRotationDistance", 0.0), 0.0);
 
         this.mobTargetMode = config.getBoolean("mobTargetMode", false);
         this.autoMobTarget = config.getBoolean("autoMobTarget", false);
-        this.autoMobTargetDelay = config.getLong("autoMobTargetDelay", 60L);
+        this.autoMobTargetDelay = clampSeconds(config.getLong("autoMobTargetDelay", 60L), 60L,
+                MAX_DURATION_SECONDS);
 
         this.teleportSmooth = config.getBoolean("teleportSmooth", false);
-        this.teleportSmoothDuration = config.getLong("teleportSmoothDuration", 3L);
-        this.teleportSmoothSpeed = config.getDouble("teleportSmoothSpeed", 50.0);
-        this.cameraSmoothing = Math.max(0.01, Math.min(1.0, config.getDouble("cameraSmoothing", 0.35)));
+        this.teleportSmoothDuration = clampSeconds(config.getLong("teleportSmoothDuration", 3L), 3L,
+                MAX_SMOOTH_TELEPORT_SECONDS);
+        this.teleportSmoothSpeed = finitePositive(config.getDouble("teleportSmoothSpeed", 50.0), 50.0);
+        this.cameraSmoothing = clampFinite(config.getDouble("cameraSmoothing", 0.35), 0.35, 0.01, 1.0);
         String configuredEasing = config.getString("cameraEasing", "SMOOTHSTEP");
         this.cameraEasing = configuredEasing != null
                 && List.of("LINEAR", "SMOOTHSTEP", "EASE_IN_OUT").contains(configuredEasing.toUpperCase(Locale.ROOT))
@@ -195,6 +242,7 @@ public class CameramanManager {
         loadRandomPerspectives();
 
         checkAndStartRotationTask();
+        restartCameraHudTask();
     }
 
     private SpectateState parseSpectateState(String value) {
@@ -246,12 +294,90 @@ public class CameramanManager {
     private void checkAndStartRotationTask() {
         boolean shouldRun = rotationMode || mobTargetMode || autoMobTarget;
 
-        // Always stop the existing task to ensure we use the latest interval/settings
+        // Always stop the existing task to ensure we use the latest interval/settings.
         stopRotationTask();
+        nextRotationAtMillis = 0L;
 
         if (shouldRun) {
             this.rotationTask = new RotationTask(this);
-            this.rotationTask.runTaskTimer(plugin, 0L, this.rotationInterval);
+            // Initial target selection is triggered immediately when the operator joins/is assigned.
+            this.nextRotationAtMillis = System.currentTimeMillis() + rotationInterval * 50L;
+            this.rotationTask.runTaskTimer(plugin, this.rotationInterval, this.rotationInterval);
+        }
+    }
+
+    private void restartCameraHudTask() {
+        if (cameraHudTask != null) {
+            cameraHudTask.cancel();
+            cameraHudTask = null;
+        }
+        if (!cameraHud) return;
+        cameraHudTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            Player cameraman = getCameraman();
+            if (cameraman != null && cameraman.isOnline() && cameraman.getGameMode() == GameMode.SPECTATOR) {
+                cameraman.sendActionBar(net.kyori.adventure.text.Component.text(getCameraStatusMessage()));
+            }
+        }, 20L, 20L);
+    }
+
+    private String cameraActivityLabel() {
+        if (cameraPaused) return messages.get("camera-state-paused");
+        if (currentPathTask != null && !currentPathTask.isCancelled()) return messages.get("camera-state-path");
+        if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) return messages.get("camera-state-moving");
+        if (currentSpectateTask != null && !currentSpectateTask.isCancelled()) return messages.get("camera-state-following");
+        Player cameraman = getCameraman();
+        if (cameraman != null && cameraman.getSpectatorTarget() != null) return messages.get("camera-state-following");
+        if (currentTargetId != null) return messages.get("camera-state-positioned");
+        return messages.get("camera-state-idle");
+    }
+
+    public String getCameraStatusMessage() {
+        String targetName = getCurrentTargetDisplayName();
+        if (targetName == null) targetName = messages.get("camera-target-none");
+        boolean rotating = rotationMode || mobTargetMode;
+        String rotationLabel = messages.get(rotating ? "camera-status-enabled" : "camera-status-disabled");
+        String nextChange = "—";
+        if (rotating) {
+            long remaining = Math.max(0L, nextRotationAtMillis - System.currentTimeMillis());
+            nextChange = Long.toString((remaining + 999L) / 1000L);
+        }
+        int targetCount = mobTargetMode ? getPotentialMobTargets().size() : getPotentialTargets().size();
+        return messages.get("camera-status-hud", targetName, rotationLabel, nextChange, targetCount,
+                cameraActivityLabel());
+    }
+
+    public List<String> getCameraDiagnostics() {
+        List<String> diagnostics = new ArrayList<>();
+        Player cameraman = getCameraman();
+        if (cameraman == null || !cameraman.isOnline()) {
+            diagnostics.add(messages.get("camera-diagnostic-no-operator"));
+            return diagnostics;
+        }
+        if (cameraman.getGameMode() != GameMode.SPECTATOR) {
+            diagnostics.add(messages.get("camera-diagnostic-not-spectator"));
+        }
+        if (cameraPaused) diagnostics.add(messages.get("camera-diagnostic-paused"));
+        boolean pathActive = currentPathTask != null && !currentPathTask.isCancelled();
+        boolean spectateActive = currentSpectateTask != null && !currentSpectateTask.isCancelled();
+        if (currentTargetId == null && !pathActive && !spectateActive) {
+            diagnostics.add(messages.get("camera-diagnostic-no-current-target"));
+        }
+        List<?> targets = mobTargetMode ? getPotentialMobTargets() : getPotentialTargets();
+        if (targets.isEmpty()) {
+            diagnostics.add(messages.get(mobTargetMode ? "camera-diagnostic-no-mobs" : "camera-diagnostic-no-players"));
+        } else if (targets.size() == 1 && (rotationMode || mobTargetMode)) {
+            diagnostics.add(messages.get("camera-diagnostic-one-target"));
+        }
+        if (!rotationMode && !mobTargetMode) {
+            diagnostics.add(messages.get("camera-diagnostic-rotation-off"));
+        }
+        if (diagnostics.isEmpty()) diagnostics.add(messages.get("camera-diagnostic-ok"));
+        return diagnostics;
+    }
+
+    void markRotationTick() {
+        if (rotationMode || mobTargetMode) {
+            nextRotationAtMillis = System.currentTimeMillis() + rotationInterval * 50L;
         }
     }
 
@@ -268,6 +394,7 @@ public class CameramanManager {
         plugin.saveConfig();
         player.setGameMode(GameMode.SPECTATOR);
         player.sendMessage(messages.get("now-cameraman"));
+        ensureTargetSelected();
     }
 
     public Player getCameraman() {
@@ -280,8 +407,19 @@ public class CameramanManager {
         if (cameramanId != null && cameramanId.equals(player.getUniqueId())) {
             player.setGameMode(GameMode.SPECTATOR);
             player.sendMessage(messages.get("welcome-cameraman"));
-
+            ensureTargetSelected();
         }
+    }
+
+    public void ensureTargetSelected() {
+        if ((rotationMode || mobTargetMode) && currentTargetId == null
+                && rotationTask != null && !rotationTask.isCancelled()) {
+            rotationTask.run();
+        }
+    }
+
+    public UUID getCurrentTargetId() {
+        return currentTargetId;
     }
 
     public void removeCameraman() {
@@ -628,6 +766,53 @@ public class CameramanManager {
         return routeStore.pointCount(name);
     }
 
+    public boolean startCameraRouteRecording(String name, long intervalTicks) {
+        if (!InputValidators.isValidProfileName(name) || intervalTicks < 1 || intervalTicks > 1200
+                || routeRecordingTask != null && !routeRecordingTask.isCancelled() || getCameraman() == null) {
+            return false;
+        }
+        stopFollowing();
+        stopPathPlayback();
+        currentTargetId = null;
+        Player cameraOperator = getCameraman();
+        if (cameraOperator != null) cameraOperator.setSpectatorTarget(null);
+        routeRecordingName = name;
+        routeRecordingPoints.clear();
+        routeRecordingTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            Player operator = getCameraman();
+            if (operator == null || !operator.isValid() || routeRecordingPoints.size() >= 1000) {
+                stopCameraRouteRecording();
+                return;
+            }
+            Location current = operator.getLocation();
+            if (routeRecordingPoints.isEmpty() || shouldRecordRoutePoint(routeRecordingPoints.get(routeRecordingPoints.size() - 1), current)) {
+                routeRecordingPoints.add(current.clone());
+            }
+        }, 0L, intervalTicks);
+        return true;
+    }
+
+    private static boolean shouldRecordRoutePoint(Location previous, Location current) {
+        if (previous.getWorld() != current.getWorld()) return true;
+        float yawDifference = Math.abs((previous.getYaw() - current.getYaw() + 540.0F) % 360.0F - 180.0F);
+        return previous.distanceSquared(current) >= 0.0625
+                || yawDifference >= 3.0F || Math.abs(previous.getPitch() - current.getPitch()) >= 3.0F;
+    }
+
+    public boolean stopCameraRouteRecording() {
+        if (routeRecordingTask == null) return false;
+        routeRecordingTask.cancel();
+        routeRecordingTask = null;
+        boolean saved = routeRecordingPoints.size() >= 2 && routeStore.addPoints(routeRecordingName, routeRecordingPoints);
+        routeRecordingPoints.clear();
+        routeRecordingName = null;
+        return saved;
+    }
+
+    public boolean isRecordingCameraRoute() {
+        return routeRecordingTask != null && !routeRecordingTask.isCancelled();
+    }
+
     public boolean addCameraRoutePoint(String name) {
         Player cameraman = getCameraman();
         return cameraman != null && routeStore.addPoint(name, cameraman.getLocation());
@@ -646,8 +831,7 @@ public class CameramanManager {
     }
 
     public boolean playCameraRoute(String name, long ticksPerSegment) {
-        return playCameraPath(routeStore.points(name), ticksPerSegment,
-                cameraHud ? messages.get("camera-path-hud", name) : null);
+        return playCameraPath(routeStore.points(name), ticksPerSegment);
     }
 
     public List<String> getCameraSceneNames() {
@@ -663,18 +847,19 @@ public class CameramanManager {
     }
 
     public boolean playCameraScene(String name, long ticksPerSegment) {
-        return playCameraPath(routeStore.scenePoints(name), ticksPerSegment,
-                cameraHud ? messages.get("camera-scene-hud", name) : null);
+        return playCameraPath(routeStore.scenePoints(name), ticksPerSegment);
     }
 
-    private boolean playCameraPath(List<Location> points, long ticksPerSegment, String hudMessage) {
+    private boolean playCameraPath(List<Location> points, long ticksPerSegment) {
         Player cameraman = getCameraman();
         if (cameraman == null || points.size() < 2) return false;
+        stopCameraRouteRecording();
         stopFollowing();
         stopPathPlayback();
+        currentTargetId = null;
         cameraman.setSpectatorTarget(null);
         currentPathTask = new CameraPathTask(cameraman, points, ticksPerSegment, cameraEasing,
-                this::isCameraPaused, hudMessage);
+                this::isCameraPaused);
         currentPathTask.runTaskTimer(plugin, 0L, 1L);
         return true;
     }
@@ -780,12 +965,20 @@ public class CameramanManager {
         return cameraHud;
     }
 
+    public void setCameraHud(boolean enabled) {
+        cameraHud = enabled;
+        config.set("cameraHud", enabled);
+        plugin.saveConfig();
+        restartCameraHudTask();
+    }
+
     public String getCameraEasing() {
         return cameraEasing;
     }
 
     public void setRotationMode(boolean enabled, long intervalSeconds) {
         this.rotationMode = enabled;
+        intervalSeconds = clampSeconds(intervalSeconds, 60L, MAX_DURATION_SECONDS);
 
         config.set("rotationMode", enabled);
         config.set("rotationInterval", intervalSeconds);
@@ -793,6 +986,7 @@ public class CameramanManager {
         plugin.saveConfig();
 
         checkAndStartRotationTask();
+        if (enabled) ensureTargetSelected();
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
@@ -807,7 +1001,12 @@ public class CameramanManager {
     }
 
     public void stopAllTasks() {
+        stopCameraRouteRecording();
         stopRotationTask();
+        if (cameraHudTask != null) {
+            cameraHudTask.cancel();
+            cameraHudTask = null;
+        }
         stopLightCheckTask();
         stopSpectateTask();
         if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
@@ -907,6 +1106,7 @@ public class CameramanManager {
         plugin.saveConfig();
 
         checkAndStartRotationTask();
+        if (enabled && rotationTask != null && !rotationTask.isCancelled()) rotationTask.run();
 
         Player cameraman = getCameraman();
         if (cameraman != null) {
@@ -920,7 +1120,8 @@ public class CameramanManager {
 
     public void setAutoMobTarget(boolean enabled, long delay) {
         this.autoMobTarget = enabled;
-        this.autoMobTargetDelay = delay;
+        this.autoMobTargetDelay = clampSeconds(delay, 60L, MAX_DURATION_SECONDS);
+        delay = this.autoMobTargetDelay;
         config.set("autoMobTarget", enabled);
         config.set("autoMobTargetDelay", delay);
         plugin.saveConfig();
@@ -961,7 +1162,8 @@ public class CameramanManager {
 
     public void setTeleportSmooth(boolean enabled, long duration) {
         this.teleportSmooth = enabled;
-        this.teleportSmoothDuration = duration;
+        this.teleportSmoothDuration = clampSeconds(duration, 3L, MAX_SMOOTH_TELEPORT_SECONDS);
+        duration = this.teleportSmoothDuration;
         config.set("teleportSmooth", enabled);
         config.set("teleportSmoothDuration", duration);
         plugin.saveConfig();
@@ -1052,8 +1254,7 @@ public class CameramanManager {
         if (target == null || !target.isValid()) return;
 
         stopSpectateTask();
-        String hudMessage = cameraHud ? messages.get("camera-hud", target.getName(), perspective.name()) : null;
-        currentSpectateTask = new SpectateTask(cameraman, target, shot, getSmoothingFor(perspective), hudMessage,
+        currentSpectateTask = new SpectateTask(cameraman, target, shot, getSmoothingFor(perspective),
                 this::isCameraPaused);
         currentSpectateTask.runTaskTimer(plugin, 0L, 1L);
     }
@@ -1061,7 +1262,7 @@ public class CameramanManager {
     private double getSmoothingFor(SpectatePerspective perspective) {
         if (perspective == SpectatePerspective.DYNAMIC || perspective == SpectatePerspective.DYNAMIC_BEHIND
                 || perspective == SpectatePerspective.DYNAMIC_FRONT || perspective == SpectatePerspective.DYNAMIC_POV) {
-            return Math.max(0.01, Math.min(1.0, Double.parseDouble(dynamicSmoothness)));
+            return clampFinite(parseFiniteOrDefault(dynamicSmoothness, 0.05), 0.05, 0.01, 1.0);
         }
         return cameraSmoothing;
     }
@@ -1103,9 +1304,8 @@ public class CameramanManager {
         stopFollowing();
 
         LocationTarget sceneTarget = new LocationTarget(startLocation);
-        String hudMessage = cameraHud ? messages.get("camera-hud", sceneTarget.getName(), actualPerspective.name()) : null;
         currentSpectateTask = new SpectateTask(cameraman, sceneTarget, shot,
-                getSmoothingFor(actualPerspective), hudMessage, this::isCameraPaused);
+                getSmoothingFor(actualPerspective), this::isCameraPaused);
         // Execute immediately to prevent 1-tick jitter
         currentSpectateTask.run();
         // Schedule subsequent runs starting from next tick
@@ -1146,12 +1346,17 @@ public class CameramanManager {
                 || perspective == SpectatePerspective.DYNAMIC_FRONT || perspective == SpectatePerspective.DYNAMIC_POV) {
             return new DynamicFollowShot(distance, height, perspective);
         } else if (perspective == SpectatePerspective.FLYBY) {
-            double dur = Double.parseDouble(flybyDuration);
+            double dur = parsePositiveFiniteOrDefault(flybyDuration, 30.0);
             return new FlybyShot(dur);
         } else if (perspective == SpectatePerspective.CRANE) {
-            double dur = Double.parseDouble(craneDuration);
-            double min = Double.parseDouble(craneHeightMin);
-            double max = Double.parseDouble(craneHeightMax);
+            double dur = parsePositiveFiniteOrDefault(craneDuration, 30.0);
+            double min = parseFiniteOrDefault(craneHeightMin, 1.0);
+            double max = parseFiniteOrDefault(craneHeightMax, 5.0);
+            if (min > max) {
+                double temp = min;
+                min = max;
+                max = temp;
+            }
             return new CraneShot(dur, min, max, distance);
         } else if (perspective == SpectatePerspective.MOVE) {
             double x = parseAndCalculate(moveX);
@@ -1247,11 +1452,13 @@ public class CameramanManager {
                     min = max;
                     max = temp;
                 }
-                return min + (new Random().nextDouble() * (max - min));
+                double result = min + (new Random().nextDouble() * (max - min));
+                return Double.isFinite(result) ? result : 3.0;
             }
 
             // Not a range, try parsing as single value
-            return Double.parseDouble(value);
+            double parsed = Double.parseDouble(value);
+            return Double.isFinite(parsed) ? parsed : 3.0;
         } catch (NumberFormatException e) {
             // Log warning?
             // plugin.getLogger().warning("Failed to parse value: " + value);
@@ -1270,7 +1477,8 @@ public class CameramanManager {
     }
 
     public void setMinRotationDistance(double distance) {
-        this.minRotationDistance = distance;
+        this.minRotationDistance = finiteNonNegative(distance, 0.0);
+        distance = this.minRotationDistance;
         config.set("minRotationDistance", distance);
         plugin.saveConfig();
 

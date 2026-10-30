@@ -65,7 +65,9 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
             Map.entry("траектория", "path"),
             Map.entry("сцена", "scene"),
             Map.entry("пауза", "pause"),
-            Map.entry("дальше", "next"));
+            Map.entry("дальше", "next"),
+            Map.entry("статус", "status"),
+            Map.entry("инфоэкран", "hud"));
 
     private static String normalizeSubCommand(String input) {
         String normalized = input.toLowerCase(Locale.ROOT);
@@ -88,7 +90,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     "mobnightvision", "showmessage", "nightvisionthreshold", "distance", "height",
                     "orbitspeed", "orbitdirection", "smoothness", "flybyduration", "craneduration",
                     "craneheightmin", "craneheightmax", "random", "scenic", "autoscenic", "movespeed",
-                    "movedirection", "menu", "profile", "operators", "path", "scene", "pause", "next"));
+                    "movedirection", "menu", "profile", "operators", "path", "scene", "pause", "next", "status", "hud"));
             subcommands.addAll(RUSSIAN_SUBCOMMANDS.keySet());
             return matching(subcommands, args[0]);
         }
@@ -108,9 +110,14 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
             return matching(operators.getOperatorNames(), current);
         }
         if (subcommand.equals("path") && argumentIndex == 1) {
-            return matching(List.of("add", "play", "list", "delete", "stop", "export", "import"), current);
+            return matching(List.of("add", "play", "list", "delete", "stop", "export", "import", "record"), current);
         }
         if (subcommand.equals("path") && argumentIndex == 2) {
+            if (args[1].equalsIgnoreCase("record")) {
+                List<String> choices = new ArrayList<>(manager.getCameraRouteNames());
+                choices.add("stop");
+                return matching(choices, current);
+            }
             return matching(manager.getCameraRouteNames(), current);
         }
         if (subcommand.equals("scene") && argumentIndex == 1) {
@@ -132,7 +139,7 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
         }
 
         if (argumentIndex == 1) {
-            if (List.of("newcomer", "mobtarget", "automob", "teleportsmooth", "mobnightvision", "showmessage")
+            if (List.of("newcomer", "mobtarget", "automob", "teleportsmooth", "mobnightvision", "showmessage", "hud")
                     .contains(subcommand)) {
                 return matching(List.of("true", "false"), current);
             }
@@ -235,12 +242,51 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 }
                 break;
 
+            case "status":
+                sender.sendMessage(manager.getCameraStatusMessage());
+                manager.getCameraDiagnostics().forEach(sender::sendMessage);
+                break;
+
+            case "hud": {
+                if (args.length < 2) {
+                    sender.sendMessage(messages.get("usage-hud"));
+                    return true;
+                }
+                Boolean enabled = parseBooleanArgument(sender, args[1]);
+                if (enabled == null) return true;
+                manager.setCameraHud(enabled);
+                sender.sendMessage(messages.get("camera-hud-toggle", enabled));
+                break;
+            }
+
             case "path": {
                 if (args.length < 2) {
                     sender.sendMessage(messages.get("path-usage"));
                     return true;
                 }
                 String action = args[1].toLowerCase(Locale.ROOT);
+                if (action.equals("record")) {
+                    if (args.length < 3) {
+                        sender.sendMessage(messages.get("path-usage"));
+                        return true;
+                    }
+                    if (args[2].equalsIgnoreCase("stop")) {
+                        boolean recording = manager.isRecordingCameraRoute();
+                        boolean saved = manager.stopCameraRouteRecording();
+                        sender.sendMessage(messages.get(!recording ? "path-record-not-active"
+                                : saved ? "path-record-saved" : "path-record-empty"));
+                        return true;
+                    }
+                    long interval = 10L;
+                    if (args.length >= 4) {
+                        Long parsed = parsePositiveLongArgument(sender, args[3]);
+                        if (parsed == null) return true;
+                        interval = parsed;
+                    }
+                    sender.sendMessage(messages.get(manager.startCameraRouteRecording(args[2], interval)
+                            ? "path-record-started" : "path-record-invalid"));
+                    return true;
+                }
                 if (action.equals("list")) {
                     List<String> names = manager.getCameraRouteNames();
                     sender.sendMessage(names.isEmpty() ? messages.get("path-empty")

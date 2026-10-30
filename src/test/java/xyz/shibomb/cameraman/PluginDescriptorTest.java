@@ -18,6 +18,7 @@ class PluginDescriptorTest {
 
             assertEquals("Cameraman", description.getName());
             assertEquals("xyz.shibomb.cameraman.CameramanPlugin", description.getMain());
+            assertEquals("https://github.com/cherdakmd/CHRDK_fork_cameraman", description.getWebsite());
             assertEquals("26.3", description.getVersion());
             assertEquals("26.3", description.getAPIVersion());
         }
