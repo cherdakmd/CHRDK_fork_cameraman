@@ -28,16 +28,23 @@ public class SpectateTask extends BukkitRunnable {
     private final CameraTarget target;
     private final CameraShot cameraShot;
     private final double smoothing;
+    private final double catchUpStep;
     private final BooleanSupplier paused;
     private long tick;
     private boolean firstFrame = true;
 
     public SpectateTask(Player cameraman, CameraTarget target, CameraShot cameraShot, double smoothing,
             BooleanSupplier paused) {
+        this(cameraman, target, cameraShot, smoothing, CATCH_UP_STEP, paused);
+    }
+
+    public SpectateTask(Player cameraman, CameraTarget target, CameraShot cameraShot, double smoothing,
+            double catchUpStep, BooleanSupplier paused) {
         this.cameraman = cameraman;
         this.target = target;
         this.cameraShot = cameraShot;
         this.smoothing = Math.max(0.01, Math.min(1.0, smoothing));
+        this.catchUpStep = catchUpStep > 0.0 && Double.isFinite(catchUpStep) ? catchUpStep : CATCH_UP_STEP;
         this.paused = paused;
     }
 
@@ -63,7 +70,7 @@ public class SpectateTask extends BukkitRunnable {
         }
 
         Location interpolated = CameraInterpolation.lerp(current, desired, smoothing);
-        interpolated = ensureCatchUpStep(current, interpolated, desired, CATCH_UP_STEP);
+        interpolated = ensureCatchUpStep(current, interpolated, desired, catchUpStep);
         cameraman.teleport(CameraInterpolation.keepInSight(target.getEyeLocation(), interpolated,
                 cameraman.getEyeHeight()));
     }
