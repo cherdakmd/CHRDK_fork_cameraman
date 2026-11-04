@@ -85,7 +85,9 @@ public final class Messages {
     /** @return index of the conversion character, or {@code -1} when this is not a format specifier */
     private static int skipFormatSpecifier(String pattern, int start) {
         int index = start;
-        while (index < pattern.length() && "-+ 0,#(".indexOf(pattern.charAt(index)) >= 0) index++;
+        // A space is deliberately NOT treated as a flag: "% error" must stay literal text instead of
+        // being parsed as the scientific "% e" conversion.
+        while (index < pattern.length() && "-+0,#(".indexOf(pattern.charAt(index)) >= 0) index++;
         while (index < pattern.length() && (Character.isDigit(pattern.charAt(index))
                 || pattern.charAt(index) == '$')) {
             index++;
