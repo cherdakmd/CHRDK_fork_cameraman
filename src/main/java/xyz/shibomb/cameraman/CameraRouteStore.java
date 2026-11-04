@@ -84,12 +84,15 @@ public final class CameraRouteStore {
     public boolean exportRoute(String name) {
         if (!validName(name) || points(name).isEmpty()) return false;
         File exportDirectory = new File(plugin.getDataFolder(), "route-exports");
-        if (!exportDirectory.exists() && !exportDirectory.mkdirs()) return false;
+        if (!exportDirectory.isDirectory() && !exportDirectory.mkdirs() && !exportDirectory.isDirectory()) {
+            plugin.getLogger().warning("Could not create the route export directory.");
+            return false;
+        }
         YamlConfiguration exported = new YamlConfiguration();
         exported.set("name", name);
         exported.set("points", routes.getMapList(routePath(name)));
         try {
-            exported.save(new File(exportDirectory, name + ".yml"));
+            exported.save(new File(exportDirectory, exportFileName(name)));
             return true;
         } catch (IOException e) {
             plugin.getLogger().warning("Could not export camera route '" + name + "': " + e.getMessage());
@@ -99,8 +102,12 @@ public final class CameraRouteStore {
 
     public boolean importRoute(String name) {
         if (!validName(name)) return false;
-        File exportedFile = new File(new File(plugin.getDataFolder(), "route-exports"), name + ".yml");
-        if (!exportedFile.isFile()) return false;
+        File exportedFile = new File(new File(plugin.getDataFolder(), "route-exports"), exportFileName(name));
+        if (!exportedFile.isFile()) {
+            // Routes saved from a client on a case-sensitive file system may use different casing.
+            exportedFile = findExportIgnoringCase(name);
+            if (exportedFile == null) return false;
+        }
         YamlConfiguration imported = YamlConfiguration.loadConfiguration(exportedFile);
         List<Map<?, ?>> rawPoints = imported.getMapList("points");
         List<Map<String, Object>> validPoints = new ArrayList<>();
@@ -177,6 +184,17 @@ public final class CameraRouteStore {
 
     private static boolean validName(String name) {
         return InputValidators.isValidProfileName(name);
+    }
+
+    /** Portable export file name; names are already restricted to {@code [A-Za-z0-9_-]}. */
+    static String exportFileName(String name) {
+        return name + ".yml";
+    }
+
+    private File findExportIgnoringCase(String name) {
+        File directory = new File(plugin.getDataFolder(), "route-exports");
+        File[] candidates = directory.listFiles((dir, fileName) -> fileName.equalsIgnoreCase(exportFileName(name)));
+        return candidates == null || candidates.length == 0 ? null : candidates[0];
     }
 
     private static String routePath(String name) {

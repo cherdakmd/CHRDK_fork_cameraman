@@ -24,6 +24,13 @@ class PovFollowTaskTest {
     }
 
     @Test
+    void aDeadTargetIsToleratedOnlyForARespawnWindow() {
+        assertFalse(PovFollowTask.exceedsDeadTicks(0L));
+        assertFalse(PovFollowTask.exceedsDeadTicks(PovFollowTask.MAX_DEAD_TICKS));
+        assertTrue(PovFollowTask.exceedsDeadTicks(PovFollowTask.MAX_DEAD_TICKS + 1L));
+    }
+
+    @Test
     void repeatedFailuresEventuallyTeleportTheCameraOntoTheTarget() {
         assertFalse(PovFollowTask.shouldForceTeleport(1));
         assertFalse(PovFollowTask.shouldForceTeleport(PovFollowTask.FORCE_TELEPORT_ATTEMPTS - 1));
