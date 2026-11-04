@@ -53,6 +53,7 @@ public class CameramanManager {
     private long teleportSmoothDuration = 3L; // Seconds
     private double teleportSmoothSpeed;
     private double cameraSmoothing = 0.35;
+    private double cameraCatchUpSpeed = SpectateTask.CATCH_UP_STEP;
     private String cameraEasing = "SMOOTHSTEP";
     private boolean cameraHud = true;
     private boolean cameraPaused;
@@ -69,6 +70,8 @@ public class CameramanManager {
     private SpectateState mobSpectateMode = SpectateState.ENABLED;
     private SpectatePerspective mobSpectatePerspective = SpectatePerspective.POV;
     private SpectateTask currentSpectateTask;
+    private PovFollowTask currentPovFollowTask;
+    private UUID povFollowTargetId;
     private boolean mobNightVision = false;
     private boolean showMessage = true;
     private int nightVisionThreshold = 7;
@@ -190,6 +193,8 @@ public class CameramanManager {
                 MAX_SMOOTH_TELEPORT_SECONDS);
         this.teleportSmoothSpeed = finitePositive(config.getDouble("teleportSmoothSpeed", 50.0), 50.0);
         this.cameraSmoothing = clampFinite(config.getDouble("cameraSmoothing", 0.35), 0.35, 0.01, 1.0);
+        this.cameraCatchUpSpeed = clampFinite(config.getDouble("cameraCatchUpSpeed", SpectateTask.CATCH_UP_STEP),
+                SpectateTask.CATCH_UP_STEP, 0.1, 16.0);
         String configuredEasing = config.getString("cameraEasing", "SMOOTHSTEP");
         this.cameraEasing = configuredEasing != null
                 && List.of("LINEAR", "SMOOTHSTEP", "EASE_IN_OUT").contains(configuredEasing.toUpperCase(Locale.ROOT))
@@ -198,7 +203,7 @@ public class CameramanManager {
 
         String spectateModeStr = config.getString("spectateMode", "true");
         this.spectateMode = parseSpectateState(spectateModeStr);
-        String perspectiveStr = config.getString("spectatePerspective", "RANDOM");
+        String perspectiveStr = config.getString("spectatePerspective", "POV");
         try {
             this.spectatePerspective = SpectatePerspective.valueOf(perspectiveStr.toUpperCase());
         } catch (IllegalArgumentException e) {
@@ -207,7 +212,7 @@ public class CameramanManager {
 
         String mobSpectateModeStr = config.getString("mobSpectateMode", "true");
         this.mobSpectateMode = parseSpectateState(mobSpectateModeStr);
-        String mobPerspectiveStr = config.getString("mobSpectatePerspective", "RANDOM");
+        String mobPerspectiveStr = config.getString("mobSpectatePerspective", "POV");
         try {
             this.mobSpectatePerspective = SpectatePerspective.valueOf(mobPerspectiveStr.toUpperCase());
         } catch (IllegalArgumentException e) {
@@ -326,6 +331,7 @@ public class CameramanManager {
         if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) return messages.get("camera-state-moving");
         if (currentSpectateTask != null && !currentSpectateTask.isCancelled()) return messages.get("camera-state-following");
         Player cameraman = getCameraman();
+        if (isPovFollowActive()) return messages.get("camera-state-following");
         if (cameraman != null && cameraman.getSpectatorTarget() != null) return messages.get("camera-state-following");
         if (currentTargetId != null) return messages.get("camera-state-positioned");
         return messages.get("camera-state-idle");
@@ -407,6 +413,7 @@ public class CameramanManager {
         if (cameramanId != null && cameramanId.equals(player.getUniqueId())) {
             player.setGameMode(GameMode.SPECTATOR);
             player.sendMessage(messages.get("welcome-cameraman"));
+            Bukkit.getScheduler().runTask(plugin, this::refreshCameraAttachment);
             ensureTargetSelected();
         }
     }
@@ -540,6 +547,9 @@ public class CameramanManager {
             // Clean up previous night vision states first
             stopLightCheckTask();
             stopSpectateTask();
+            // Stop the previous POV watchdog before switching, so it cannot re-attach the old target
+            // while the camera is being moved to the new one.
+            stopPovFollowTask();
             removeCameramanNightVision(cameraman);
 
             if (target instanceof Player) {
@@ -606,10 +616,11 @@ public class CameramanManager {
             CameraShot shot = createCameraShot(activePerspective, maxDist, maxHeight);
             EntityTarget cameraTarget = new EntityTarget(target);
 
+            boolean pov = activeSpectateMode && activePerspective == SpectatePerspective.POV;
             Runnable onTargetSet = () -> {
                 if (activeSpectateMode) {
-                    if (activePerspective == SpectatePerspective.POV) {
-                        cameraman.setSpectatorTarget(target);
+                    if (pov) {
+                        startPovFollow(cameraman, target);
                         sendInfoMessage(cameraman, messages.get("now-spectating-pov", target.getName()));
                     } else {
                         cameraman.setSpectatorTarget(null);
@@ -631,7 +642,7 @@ public class CameramanManager {
 
             boolean canInterpolate = teleportSmooth
                     && cameraman.getWorld().equals(target.getWorld())
-                    && !(activeSpectateMode && activePerspective == SpectatePerspective.POV);
+                    && !pov;
             if (canInterpolate) {
                 sendInfoMessage(cameraman, messages.get("moving-to", target.getName()));
                 double distanceToTarget = cameraman.getLocation().distance(target.getLocation());
@@ -645,6 +656,12 @@ public class CameramanManager {
             }
 
             if (activeSpectateMode) {
+                // Always move the camera to the new target first: attaching/watching from the previous
+                // position used to leave the camera frozen in place when the target was far away.
+                cameraman.setSpectatorTarget(null);
+                if (!pov) {
+                    cameraman.teleport(shot.getNextLocation(cameraman, cameraTarget, 0));
+                }
                 onTargetSet.run();
             } else {
                 Location targetLoc = shot.getNextLocation(cameraman, cameraTarget, 0);
@@ -664,6 +681,7 @@ public class CameramanManager {
         currentTargetId = null;
         Player cameraman = getCameraman();
         if (cameraman != null) {
+            stopPovFollowTask();
             cameraman.setSpectatorTarget(null);
             stopLightCheckTask();
             stopSpectateTask();
@@ -1009,6 +1027,7 @@ public class CameramanManager {
         }
         stopLightCheckTask();
         stopSpectateTask();
+        stopPovFollowTask();
         if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
             currentTeleportTask.cancel();
             currentTeleportTask = null;
@@ -1255,8 +1274,53 @@ public class CameramanManager {
 
         stopSpectateTask();
         currentSpectateTask = new SpectateTask(cameraman, target, shot, getSmoothingFor(perspective),
-                this::isCameraPaused);
+                cameraCatchUpSpeed, this::isCameraPaused);
         currentSpectateTask.runTaskTimer(plugin, 0L, 1L);
+    }
+
+    /**
+     * Attaches the camera to the target in first person and keeps it attached.
+     *
+     * <p>The camera is teleported next to the target before attaching, because
+     * {@code setSpectatorTarget} is ignored for entities in another world or outside the client's
+     * tracking range. {@link PovFollowTask} then re-attaches the target whenever the spectator mode
+     * drops it, e.g. after respawns, world changes, teleports or a sneaking dismount.</p>
+     */
+    private void startPovFollow(Player cameraman, org.bukkit.entity.Entity target) {
+        if (isFollowingTarget(target.getUniqueId())) return;
+        stopPovFollowTask();
+        cameraman.setSpectatorTarget(null);
+        cameraman.teleport(target.getLocation());
+        cameraman.setSpectatorTarget(target);
+
+        UUID targetId = target.getUniqueId();
+        povFollowTargetId = targetId;
+        currentPovFollowTask = new PovFollowTask(cameraman, targetId, () -> handlePovTargetLost(targetId));
+        currentPovFollowTask.runTaskTimer(plugin, 2L, 1L);
+    }
+
+    /** Called from the POV watchdog when the target disappears or stops being followable. */
+    private void handlePovTargetLost(UUID targetId) {
+        if (targetId == null || !targetId.equals(currentTargetId)) return;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (targetId.equals(currentTargetId)) handleTargetUnavailable(targetId);
+        });
+    }
+
+    private void stopPovFollowTask() {
+        if (currentPovFollowTask != null && !currentPovFollowTask.isCancelled()) {
+            currentPovFollowTask.cancel();
+        }
+        currentPovFollowTask = null;
+        povFollowTargetId = null;
+    }
+
+    boolean isPovFollowActive() {
+        return currentPovFollowTask != null && !currentPovFollowTask.isCancelled();
+    }
+
+    boolean isFollowingTarget(UUID targetId) {
+        return targetId != null && isPovFollowActive() && targetId.equals(povFollowTargetId);
     }
 
     private double getSmoothingFor(SpectatePerspective perspective) {
@@ -1305,7 +1369,7 @@ public class CameramanManager {
 
         LocationTarget sceneTarget = new LocationTarget(startLocation);
         currentSpectateTask = new SpectateTask(cameraman, sceneTarget, shot,
-                getSmoothingFor(actualPerspective), this::isCameraPaused);
+                getSmoothingFor(actualPerspective), cameraCatchUpSpeed, this::isCameraPaused);
         // Execute immediately to prevent 1-tick jitter
         currentSpectateTask.run();
         // Schedule subsequent runs starting from next tick
@@ -1314,6 +1378,7 @@ public class CameramanManager {
 
     public void stopFollowing() {
         stopPathPlayback();
+        stopPovFollowTask();
         if (currentSpectateTask != null && !currentSpectateTask.isCancelled()) {
             currentSpectateTask.cancel();
         }
@@ -1367,6 +1432,33 @@ public class CameramanManager {
         } else {
             return new StaticShot(perspective, distance, height);
         }
+    }
+
+    /** Re-attaches the camera after the operator respawns or changes world, keeping the target. */
+    public void refreshCameraAttachment() {
+        Player cameraman = getCameraman();
+        if (cameraman == null || !cameraman.isOnline() || currentTargetId == null) return;
+        // The watchdog already keeps the attachment alive; re-attaching here would teleport the
+        // camera again on every teleport event of the operator.
+        if (isFollowingTarget(currentTargetId)) return;
+        org.bukkit.entity.Entity target = Bukkit.getEntity(currentTargetId);
+        if (target == null || !target.isValid()) return;
+        boolean targetIsPlayer = target instanceof Player;
+        SpectatePerspective perspective = targetIsPlayer ? spectatePerspective : mobSpectatePerspective;
+        SpectateState state = targetIsPlayer ? spectateMode : mobSpectateMode;
+        if (cameraman.getGameMode() == GameMode.SPECTATOR
+                && perspective == SpectatePerspective.POV && state == SpectateState.ENABLED) {
+            startPovFollow(cameraman, target);
+        }
+    }
+
+    /** Refreshes the camera attachment when {@code playerId} is the operator or the current target. */
+    public void refreshCameraAttachmentFor(UUID playerId) {
+        if (playerId == null) return;
+        Player cameraman = getCameraman();
+        if (cameraman == null || !cameraman.isOnline()) return;
+        if (!cameraman.getUniqueId().equals(playerId) && !playerId.equals(currentTargetId)) return;
+        refreshCameraAttachment();
     }
 
     private void stopSpectateTask() {

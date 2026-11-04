@@ -9,6 +9,13 @@ import java.util.function.BooleanSupplier;
 import xyz.shibomb.cameraman.shots.CameraShot;
 import xyz.shibomb.cameraman.targets.CameraTarget;
 
+/**
+ * Glides the camera from its current position to the shot position of a new target.
+ *
+ * <p>Obstruction checks are anchored on the target ({@link CameraInterpolation#keepInSight}), so a
+ * transition started behind a wall or on the other side of the world still completes instead of
+ * getting pinned in place.</p>
+ */
 public class SmoothTeleportTask extends BukkitRunnable {
 
     private final Player cameraman;
@@ -43,7 +50,8 @@ public class SmoothTeleportTask extends BukkitRunnable {
         if (paused != null && paused.getAsBoolean()) return;
 
         if (currentTick >= totalTicks) {
-            cameraman.teleport(destination);
+            cameraman.teleport(CameraInterpolation.keepInSight(target.getEyeLocation(), destination,
+                    cameraman.getEyeHeight()));
             cancel();
             if (onComplete != null) onComplete.run();
             return;
@@ -52,7 +60,8 @@ public class SmoothTeleportTask extends BukkitRunnable {
         double progress = (double) currentTick / totalTicks;
         Location frame = CameraInterpolation.lerp(startLocation, destination,
                 CameraInterpolation.ease(progress, easing));
-        cameraman.teleport(CameraInterpolation.avoidSolidBlocks(cameraman, frame));
+        cameraman.teleport(CameraInterpolation.keepInSight(target.getEyeLocation(), frame,
+                cameraman.getEyeHeight()));
         currentTick++;
     }
 }

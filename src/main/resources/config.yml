@@ -62,6 +62,9 @@ teleportSmoothSpeed: 50.0
 # Сглаживание камеры для всех движущихся ракурсов (0.01–1.0).
 # Чем ниже значение, тем мягче и медленнее камера догоняет целевую позицию.
 cameraSmoothing: 0.35
+# Минимальная скорость догоняния цели в блоках за тик (0.1–16.0).
+# Не даёт камере отставать от игрока даже при очень мягком сглаживании.
+cameraCatchUpSpeed: 2.0
 # Кривая плавного перехода: LINEAR, SMOOTHSTEP или EASE_IN_OUT.
 cameraEasing: SMOOTHSTEP
 # Показывать текущий режим и цель в action bar.
@@ -71,14 +74,15 @@ cameraHud: true
 spectateMode: true
 
 # Ракурс наблюдения за игроками (POV, BEHIND, FRONT, RANDOM).
-spectatePerspective: RANDOM
+# По умолчанию — POV: камера смотрит глазами цели и неотрывно следует за ней.
+spectatePerspective: POV
 
 # Включён ли режим наблюдения за мобами.
 mobSpectateMode: true
 
 # Ракурс наблюдения за мобами (POV, BEHIND, FRONT, RANDOM).
-# Ракурс наблюдения за мобами (POV, BEHIND, FRONT, RANDOM).
-mobSpectatePerspective: RANDOM
+# По умолчанию — POV: камера смотрит глазами моба и неотрывно следует за ним.
+mobSpectatePerspective: POV
 
 # Включено ли ночное зрение при наблюдении за мобами.
 mobNightVision: true
