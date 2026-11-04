@@ -145,6 +145,42 @@ public final class OperatorRegistry {
         for (CameramanManager manager : sessions.values()) manager.refreshPlayerTarget(player);
     }
 
+    /** Re-attaches POV cameras that follow or are operated by {@code player}. */
+    public void refreshCameraAttachment(Player player) {
+        refreshCameraAttachmentFor(player == null ? null : player.getUniqueId());
+    }
+
+    /**
+     * Re-attaches POV cameras on the next tick, after the server finished the respawn, teleport or
+     * world change that drops spectator attachments.
+     */
+    public void scheduleCameraAttachmentRefresh(Player player) {
+        if (player == null) return;
+        java.util.UUID id = player.getUniqueId();
+        if (!isTracked(id)) return;
+        Bukkit.getScheduler().runTask(plugin, () -> refreshCameraAttachmentFor(id));
+    }
+
+    /** True when {@code id} is a camera operator or the current target of one. */
+    private boolean isTracked(java.util.UUID id) {
+        if (sessions.containsKey(id)) return true;
+        for (CameramanManager manager : sessions.values()) {
+            if (id.equals(manager.getCurrentTargetId())) return true;
+        }
+        return fallbackManager != null && !sessions.containsValue(fallbackManager)
+                && id.equals(fallbackManager.getCurrentTargetId());
+    }
+
+    private void refreshCameraAttachmentFor(java.util.UUID id) {
+        if (id == null) return;
+        for (CameramanManager manager : sessions.values()) {
+            manager.refreshCameraAttachmentFor(id);
+        }
+        if (fallbackManager != null && !sessions.containsValue(fallbackManager)) {
+            fallbackManager.refreshCameraAttachmentFor(id);
+        }
+    }
+
     public void stopAllTasks() {
         for (CameramanManager manager : sessions.values()) manager.stopAllTasks();
         if (!sessions.containsValue(fallbackManager)) fallbackManager.stopAllTasks();

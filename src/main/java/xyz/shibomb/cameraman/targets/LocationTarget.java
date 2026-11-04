@@ -12,7 +12,7 @@ public class LocationTarget implements CameraTarget {
     @Override
     public Location getLocation() {
         // Return a clone so the original isn't modified
-        return location.clone();
+        return location == null ? null : location.clone();
     }
 
     @Override

@@ -8,6 +8,11 @@ import org.bukkit.util.Vector;
 /** Small, world-safe interpolation helpers shared by camera movement tasks. */
 final class CameraInterpolation {
 
+    /** Minimal distance the camera keeps from the target when it is pushed away from a wall. */
+    static final double MIN_LINE_OF_SIGHT_DISTANCE = 0.25;
+    /** Distance kept in front of an obstacle blocking the view of the target. */
+    static final double OBSTACLE_MARGIN = 0.4;
+
     private CameraInterpolation() {
     }
 
@@ -39,6 +44,66 @@ final class CameraInterpolation {
         safe.setYaw(desired.getYaw());
         safe.setPitch(desired.getPitch());
         return safe;
+    }
+
+    /**
+     * Keeps a third-person camera position on the target's side of walls.
+     *
+     * <p>The line of sight is traced from the target towards the requested camera position. Clamping
+     * the result onto that ray means the camera can never be dragged into a wall or pinned behind
+     * terrain it is trying to leave, which is what happened when the ray started at the camera's old
+     * position after a target switch.</p>
+     *
+     * @param anchorEye target eye location the camera should keep in view
+     * @param desired   requested camera position (player feet coordinates)
+     * @param eyeHeight camera eye height, used to trace between eye positions
+     * @return the closest safe location to {@code desired} that still sees the anchor
+     */
+    static Location keepInSight(Location anchorEye, Location desired, double eyeHeight) {
+        if (anchorEye == null || desired == null || anchorEye.getWorld() == null
+                || !anchorEye.getWorld().equals(desired.getWorld())) {
+            return desired;
+        }
+
+        Vector anchor = anchorEye.toVector();
+        Vector goal = desired.toVector().add(new Vector(0.0, eyeHeight, 0.0));
+        Vector delta = goal.clone().subtract(anchor);
+        double rayLength = delta.length();
+        if (rayLength < 0.75) return desired;
+
+        Vector direction = delta.clone().multiply(1.0 / rayLength);
+        var hit = anchorEye.getWorld().rayTraceBlocks(anchor.toLocation(anchorEye.getWorld()), direction,
+                rayLength, FluidCollisionMode.NEVER, true);
+        if (hit == null || hit.getHitPosition() == null) return desired;
+
+        double hitDistance = anchor.distance(hit.getHitPosition());
+        double allowed = clampRayDistance(rayLength, hitDistance, OBSTACLE_MARGIN);
+        if (allowed >= rayLength) return desired;
+
+        Location result = anchorEye.clone().add(direction.multiply(allowed)).subtract(0.0, eyeHeight, 0.0);
+        result.setYaw(desired.getYaw());
+        result.setPitch(desired.getPitch());
+        return result;
+    }
+
+    /**
+     * Pure helper behind {@link #keepInSight(Location, Location, double)}.
+     *
+     * @param rayLength   distance from the target to the requested camera position
+     * @param hitDistance distance from the target to the first obstacle, negative or non-finite when unknown
+     * @param margin      gap kept in front of the obstacle
+     * @return distance from the target the camera is allowed to occupy
+     */
+    static double clampRayDistance(double rayLength, double hitDistance, double margin) {
+        if (!Double.isFinite(rayLength) || rayLength <= 0.0) return 0.0;
+        if (!Double.isFinite(hitDistance) || hitDistance < 0.0) return rayLength;
+        double safeMargin = Double.isFinite(margin) && margin >= 0.0 ? margin : OBSTACLE_MARGIN;
+        double allowed = hitDistance - safeMargin;
+        if (allowed < MIN_LINE_OF_SIGHT_DISTANCE) {
+            // The obstacle is closer than the margin: stay in front of it instead of jumping through it.
+            allowed = Math.min(hitDistance, MIN_LINE_OF_SIGHT_DISTANCE);
+        }
+        return Math.max(0.0, Math.min(rayLength, allowed));
     }
 
     static double smoothStep(double amount) {
