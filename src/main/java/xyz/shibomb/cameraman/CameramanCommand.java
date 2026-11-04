@@ -769,6 +769,30 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                 manager.setCraneDuration(args[1]);
                 break;
 
+            case "craneheightmin":
+                if (args.length < 2) {
+                    sender.sendMessage(messages.get("usage-crane-height-min"));
+                    return true;
+                }
+                if (!isPositiveFiniteNumber(args[1])) {
+                    sender.sendMessage(messages.get("invalid-crane-height"));
+                    return true;
+                }
+                manager.setCraneHeightMin(args[1]);
+                break;
+
+            case "craneheightmax":
+                if (args.length < 2) {
+                    sender.sendMessage(messages.get("usage-crane-height-max"));
+                    return true;
+                }
+                if (!isPositiveFiniteNumber(args[1])) {
+                    sender.sendMessage(messages.get("invalid-crane-height"));
+                    return true;
+                }
+                manager.setCraneHeightMax(args[1]);
+                break;
+
             case "random":
                 if (args.length < 3) {
                     sender.sendMessage(messages.get("usage-random"));

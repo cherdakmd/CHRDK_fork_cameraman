@@ -71,6 +71,7 @@ public class CameramanManager {
     private SpectatePerspective mobSpectatePerspective = SpectatePerspective.POV;
     private SpectateTask currentSpectateTask;
     private PovFollowTask currentPovFollowTask;
+    private boolean scenicTaskActive;
     private UUID povFollowTargetId;
     private boolean mobNightVision = false;
     private boolean showMessage = true;
@@ -689,13 +690,22 @@ public class CameramanManager {
     }
 
     public void clearTarget() {
+        clearTarget(true);
+    }
+
+    /**
+     * @param keepScenic when {@code true}, an automatic scenic shot that is already running is left
+     *                   untouched; dropping a target must not black out the camera when no
+     *                   replacement target exists
+     */
+    private void clearTarget(boolean keepScenic) {
         currentTargetId = null;
         Player cameraman = getCameraman();
         if (cameraman != null) {
             stopPovFollowTask();
             cameraman.setSpectatorTarget(null);
             stopLightCheckTask();
-            stopSpectateTask();
+            if (!keepScenic || !scenicTaskActive) stopSpectateTask();
             stopPathPlayback();
             if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
                 currentTeleportTask.cancel();
@@ -919,14 +929,21 @@ public class CameramanManager {
 
     /**
      * Switches to the next eligible target.
-     *
-     * @return {@code true} only when the camera really moved to another target
-     */
     /** True when at least one target is eligible in the active target mode. */
     public boolean hasEligibleTargets() {
         return mobTargetMode ? !getPotentialMobTargets().isEmpty() : !getPotentialTargets().isEmpty();
     }
 
+    /** True while an automatic scenic shot (no target) is running. */
+    public boolean isScenicTaskActive() {
+        return scenicTaskActive && currentSpectateTask != null && !currentSpectateTask.isCancelled();
+    }
+
+    /**
+     * Switches to the next eligible target.
+     *
+     * @return {@code true} only when the camera really moved to another target
+     */
     public boolean advanceTarget() {
         List<? extends org.bukkit.entity.Entity> targets = mobTargetMode
                 ? getPotentialMobTargets() : getPotentialTargets();
@@ -1123,7 +1140,8 @@ public class CameramanManager {
             return;
         }
         currentTargetId = null;
-        clearTarget();
+        boolean scenicWasActive = scenicTaskActive;
+        clearTarget(true);
         List<? extends org.bukkit.entity.Entity> replacements;
         if (mobTargetMode) {
             replacements = getPotentialMobTargets();
@@ -1131,7 +1149,12 @@ public class CameramanManager {
             replacements = getPotentialTargets();
         }
         if (!replacements.isEmpty()) {
-            setTarget(replacements.get(0));
+            if (setTarget(replacements.get(0))) return;
+        }
+        // Nothing to follow: fall back to the scenic shot instead of leaving the camera frozen.
+        if (autoScenic && !scenicWasActive) {
+            Player cameraman = getCameraman();
+            if (cameraman != null) startScenicTask(cameraman.getLocation(), autoScenicPerspective);
         }
     }
 
@@ -1398,6 +1421,7 @@ public class CameramanManager {
         stopFollowing();
 
         LocationTarget sceneTarget = new LocationTarget(startLocation);
+        scenicTaskActive = true;
         currentSpectateTask = new SpectateTask(cameraman, sceneTarget, shot,
                 getSmoothingFor(actualPerspective), cameraCatchUpSpeed, this::isCameraPaused);
         // Execute immediately to prevent 1-tick jitter
@@ -1413,6 +1437,7 @@ public class CameramanManager {
             currentSpectateTask.cancel();
         }
         currentSpectateTask = null;
+        scenicTaskActive = false;
         if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
             currentTeleportTask.cancel();
             currentTeleportTask = null;
@@ -1489,6 +1514,13 @@ public class CameramanManager {
         Player cameraman = getCameraman();
         if (cameraman == null || !cameraman.isOnline()) return;
         if (!cameraman.getUniqueId().equals(playerId) && !playerId.equals(currentTargetId)) return;
+        if (cameraman.getUniqueId().equals(playerId) && cameraman.getGameMode() != GameMode.SPECTATOR) {
+            // Respawning or leaving spectator drops the camera; put the operator back into spectator
+            // mode so the camera keeps filming instead of silently stopping.
+            cameraman.setGameMode(GameMode.SPECTATOR);
+            Bukkit.getScheduler().runTask(plugin, this::refreshCameraAttachment);
+            return;
+        }
         refreshCameraAttachment();
     }
 
@@ -1497,6 +1529,7 @@ public class CameramanManager {
             currentSpectateTask.cancel();
             currentSpectateTask = null;
         }
+        scenicTaskActive = false;
     }
 
     public void setMobNightVision(boolean enabled) {
@@ -1651,6 +1684,27 @@ public class CameramanManager {
         plugin.saveConfig();
         if (getCameraman() != null)
             sendInfoMessage(getCameraman(), messages.get("crane-duration", val));
+    }
+
+    /**
+     * Sets the lower crane height. Values above the configured maximum are acceptable: the shot
+     * implementation swaps the bounds, so the pair always describes a valid range.
+     */
+    public void setCraneHeightMin(String val) {
+        this.craneHeightMin = val;
+        config.set("craneHeightMin", val);
+        plugin.saveConfig();
+        if (getCameraman() != null)
+            sendInfoMessage(getCameraman(), messages.get("crane-height-min", val));
+    }
+
+    /** Sets the upper crane height; see {@link #setCraneHeightMin(String)} for range handling. */
+    public void setCraneHeightMax(String val) {
+        this.craneHeightMax = val;
+        config.set("craneHeightMax", val);
+        plugin.saveConfig();
+        if (getCameraman() != null)
+            sendInfoMessage(getCameraman(), messages.get("crane-height-max", val));
     }
 
     public void setRandomPerspectives(String type, List<String> perspectives) {
