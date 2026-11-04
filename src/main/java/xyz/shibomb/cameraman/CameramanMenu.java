@@ -15,7 +15,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -211,16 +212,17 @@ public final class CameramanMenu implements Listener {
         pendingProfileNames.remove(event.getPlayer().getUniqueId());
     }
 
-    @EventHandler
-    public void onProfileNameChat(AsyncPlayerChatEvent event) {
+    @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST)
+    public void onProfileNameChat(AsyncChatEvent event) {
         ProfilePrompt prompt = pendingProfileNames.remove(event.getPlayer().getUniqueId());
         if (prompt == null) return;
         event.setCancelled(true);
-        String profileName = event.getMessage().trim();
+        String profileName = PlainTextComponentSerializer.plainText().serialize(event.message()).trim();
         CameramanManager manager = prompt.manager();
+        UUID playerId = event.getPlayer().getUniqueId();
         Bukkit.getScheduler().runTask(plugin, () -> {
-            Player player = event.getPlayer();
-            if (!player.isOnline()) return;
+            Player player = Bukkit.getPlayer(playerId);
+            if (player == null || !player.isOnline()) return;
             if (profileName.equalsIgnoreCase("cancel")) {
                 player.sendMessage(manager.getMessages().get("menu-profile-cancelled"));
             } else if (prompt.renameFrom() == null && manager.saveProfile(profileName)) {
