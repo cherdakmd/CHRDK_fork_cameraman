@@ -288,7 +288,10 @@ public final class CameramanMenu implements Listener {
                 openDashboard(viewer, manager);
             }
             case "next-target" -> {
-                if (!manager.advanceTarget()) viewer.sendMessage(manager.getMessages().get("menu-no-targets"));
+                if (!manager.advanceTarget()) {
+                    viewer.sendMessage(manager.getMessages().get(manager.hasEligibleTargets()
+                            ? "next-target-single" : "menu-no-targets"));
+                }
                 viewer.closeInventory();
             }
             case "newcomer" -> {
@@ -371,7 +374,10 @@ public final class CameramanMenu implements Listener {
                 else openTargets(viewer, manager, 0);
                 return;
             }
-            manager.setTarget(target);
+            if (!manager.setTarget(target)) {
+                viewer.sendMessage(manager.getMessages().get("target-set-failed", target.getName()));
+                return;
+            }
             viewer.closeInventory();
         } catch (IllegalArgumentException ignored) {
             viewer.sendMessage(manager.getMessages().get("menu-target-gone"));

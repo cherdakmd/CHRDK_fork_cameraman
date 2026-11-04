@@ -26,6 +26,8 @@ public final class PovFollowTask extends BukkitRunnable {
     static final long RETRY_INTERVAL_TICKS = 4L;
     /** Failed attach attempts after which the camera is teleported onto the target. */
     static final int FORCE_TELEPORT_ATTEMPTS = 3;
+    /** Ticks a target may stay dead before it is treated as unavailable (10 seconds). */
+    static final long MAX_DEAD_TICKS = 200L;
 
     private final Player cameraman;
     private final UUID targetId;
@@ -33,6 +35,7 @@ public final class PovFollowTask extends BukkitRunnable {
     private long tick;
     private long lastAttemptTick = -1L;
     private int failedAttempts;
+    private long deadTicks;
 
     public PovFollowTask(Player cameraman, UUID targetId, Runnable onTargetUnavailable) {
         this.cameraman = cameraman;
@@ -55,9 +58,16 @@ public final class PovFollowTask extends BukkitRunnable {
         }
 
         if (isDeadPlayer(target)) {
-            // Keep the task alive: the same player becomes spectatable again after respawning.
+            // The same player becomes spectatable again after respawning, but a target that never
+            // respawns (kept dead by another plugin, quit during death) must not freeze the camera
+            // on a corpse forever.
+            if (exceedsDeadTicks(++deadTicks)) {
+                cancel();
+                if (onTargetUnavailable != null) onTargetUnavailable.run();
+            }
             return;
         }
+        deadTicks = 0L;
 
         if (needsReposition(cameraman, target)) {
             // Teleport first and attach on a later tick: a spectator target set in the same tick as a
@@ -86,6 +96,11 @@ public final class PovFollowTask extends BukkitRunnable {
     /** Re-attaching packets are throttled so a stubborn target does not spam the connection. */
     static boolean shouldRetry(long tick, long lastAttemptTick) {
         return lastAttemptTick < 0L || tick - lastAttemptTick >= RETRY_INTERVAL_TICKS;
+    }
+
+    /** True once the target has been dead for longer than {@link #MAX_DEAD_TICKS}. */
+    static boolean exceedsDeadTicks(long deadTicks) {
+        return deadTicks > MAX_DEAD_TICKS;
     }
 
     /** After repeated failures the camera is teleported onto the target to force the entity to load. */

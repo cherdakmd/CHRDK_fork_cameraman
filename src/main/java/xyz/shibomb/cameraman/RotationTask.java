@@ -62,8 +62,9 @@ public class RotationTask extends BukkitRunnable {
     private <T extends Entity> void selectAndSet(List<T> targets, Player cameraman) {
         T selected = selectWeightedTarget(targets, cameraman, manager.getMinRotationDistance());
         if (selected == null) return;
-        manager.setTarget(selected);
-        remember(selected.getUniqueId(), targets.size());
+        // Remember only targets the camera actually moved to: a rejected switch (filters, missing
+        // spectator mode) would otherwise poison the recent-target history and cause repeats.
+        if (manager.setTarget(selected)) remember(selected.getUniqueId(), targets.size());
     }
 
     private <T extends Entity> T selectWeightedTarget(List<T> targets, Player cameraman, double minDistance) {

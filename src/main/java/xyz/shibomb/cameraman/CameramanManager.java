@@ -449,7 +449,7 @@ public class CameramanManager {
     private static final List<String> PROFILE_SETTINGS = List.of(
             "newcomerMode", "rotationMode", "rotationInterval", "minRotationDistance", "mobTargetMode",
             "autoMobTarget", "autoMobTargetDelay", "teleportSmooth", "teleportSmoothDuration",
-            "teleportSmoothSpeed", "cameraSmoothing", "cameraEasing", "cameraHud", "spectateMode", "spectatePerspective", "mobSpectateMode",
+            "teleportSmoothSpeed", "cameraSmoothing", "cameraCatchUpSpeed", "cameraEasing", "cameraHud", "spectateMode", "spectatePerspective", "mobSpectateMode",
             "mobSpectatePerspective", "mobNightVision", "showMessage", "nightVisionThreshold",
             "spectateDistance", "spectateHeight", "orbitSpeed", "orbitDirection", "dynamicSmoothness",
             "flybyDuration", "craneDuration", "craneHeightMin", "craneHeightMax", "moveX", "moveY",
@@ -537,144 +537,155 @@ public class CameramanManager {
         return target == null ? null : getTargetDisplayName(target);
     }
 
-    public void setTarget(org.bukkit.entity.Entity target) {
+    /**
+     * Switches the camera to {@code target}.
+     *
+     * @return {@code true} only when the camera was actually moved to the new target, so callers can
+     *         report the real outcome instead of assuming success
+     */
+    public boolean setTarget(org.bukkit.entity.Entity target) {
         Player cameraman = getCameraman();
-        if (cameraman != null && target != null) {
-            if (!isTargetAllowed(target)) {
-                sendInfoMessage(cameraman, messages.get("target-not-allowed"));
-                return;
+        if (cameraman == null || target == null) {
+            return false;
+        }
+        if (!isTargetAllowed(target)) {
+            sendInfoMessage(cameraman, messages.get("target-not-allowed"));
+            return false;
+        }
+        // Reject the operator himself before tearing down the running camera tasks.
+        if (cameraman.getUniqueId().equals(target.getUniqueId())) {
+            sendInfoMessage(cameraman, messages.get("cannot-target-self"));
+            return false;
+        }
+        // Reject a non-spectator operator before tearing down the running camera tasks.
+        if (cameraman.getGameMode() != GameMode.SPECTATOR) {
+            sendInfoMessage(cameraman, messages.get("cannot-spectate-not-spectator", target.getName()));
+            return false;
+        }
+
+        // Clean up previous night vision states first
+        stopLightCheckTask();
+        stopSpectateTask();
+        // Stop the previous POV watchdog before switching, so it cannot re-attach the old target
+        // while the camera is being moved to the new one.
+        stopPovFollowTask();
+        removeCameramanNightVision(cameraman);
+
+        if (target instanceof Player) {
+            // If targeting a player, disable mob target mode (conceptually, we are focusing
+            // on a player now)
+            if (mobTargetMode) {
+                setMobTargetMode(false);
+                sendInfoMessage(cameraman, messages.get("mob-mode-disabled-player-target"));
             }
-            // Clean up previous night vision states first
-            stopLightCheckTask();
-            stopSpectateTask();
-            // Stop the previous POV watchdog before switching, so it cannot re-attach the old target
-            // while the camera is being moved to the new one.
-            stopPovFollowTask();
-            removeCameramanNightVision(cameraman);
+            lastPlayerTargetTime = System.currentTimeMillis();
+        }
 
-            if (target instanceof Player) {
-                if (cameraman.getUniqueId().equals(target.getUniqueId())) {
-                    return; // Невозможно наблюдать за self
-                }
-                // If targeting a player, disable mob target mode (conceptually, we are focusing
-                // on a player now)
-                if (mobTargetMode) {
-                    setMobTargetMode(false);
-                    sendInfoMessage(cameraman, messages.get("mob-mode-disabled-player-target"));
-                }
-                lastPlayerTargetTime = System.currentTimeMillis();
-            }
+        currentTargetId = target.getUniqueId();
+        sendInfoMessage(cameraman, messages.get("target-switched", getTargetDisplayName(target)));
 
-            if (cameraman.getGameMode() != GameMode.SPECTATOR) {
-                sendInfoMessage(cameraman,
-                        messages.get("cannot-spectate-not-spectator", target.getName()));
-                return;
-            }
-            currentTargetId = target.getUniqueId();
-            sendInfoMessage(cameraman, messages.get("target-switched", getTargetDisplayName(target)));
+        stopPathPlayback();
+        if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
+            currentTeleportTask.cancel();
+        }
 
-            stopPathPlayback();
-            if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
-                currentTeleportTask.cancel();
-            }
+        cameraman.setSpectatorTarget(null); // Reset first
 
-            cameraman.setSpectatorTarget(null); // Reset first
+        // Determine active perspective
+        SpectatePerspective configPerspective;
+        if (target instanceof Player) {
+            configPerspective = spectatePerspective;
+        } else {
+            configPerspective = mobSpectatePerspective;
+        }
 
-            // Determine active perspective
-            SpectatePerspective configPerspective;
-            if (target instanceof Player) {
-                configPerspective = spectatePerspective;
+        SpectatePerspective activePerspective;
+        if ("RANDOM".equalsIgnoreCase(configPerspective.name())) {
+            List<SpectatePerspective> pool;
+            if (target instanceof LocationTarget) {
+                pool = randomScenicPerspectives;
+            } else if (target instanceof Player) {
+                pool = randomPlayerPerspectives;
             } else {
-                configPerspective = mobSpectatePerspective;
+                pool = randomMobPerspectives;
             }
 
-            SpectatePerspective activePerspective;
-            if ("RANDOM".equalsIgnoreCase(configPerspective.name())) {
-                List<SpectatePerspective> pool;
-                if (target instanceof LocationTarget) {
-                    pool = randomScenicPerspectives;
-                } else if (target instanceof Player) {
-                    pool = randomPlayerPerspectives;
-                } else {
-                    pool = randomMobPerspectives;
-                }
-
-                if (pool.isEmpty()) {
-                    activePerspective = SpectatePerspective.POV;
-                } else {
-                    activePerspective = pool.get(new Random().nextInt(pool.size()));
-                }
+            if (pool.isEmpty()) {
+                activePerspective = SpectatePerspective.POV;
             } else {
-                activePerspective = configPerspective;
+                activePerspective = pool.get(new Random().nextInt(pool.size()));
             }
+        } else {
+            activePerspective = configPerspective;
+        }
 
-            double maxDist = parseAndCalculate(spectateDistance);
-            double maxHeight = parseAndCalculate(spectateHeight);
-            boolean activeSpectateMode = target instanceof Player
-                    ? resolveSpectateState(spectateMode)
-                    : resolveSpectateState(mobSpectateMode);
-            CameraShot shot = createCameraShot(activePerspective, maxDist, maxHeight);
-            EntityTarget cameraTarget = new EntityTarget(target);
+        double maxDist = parseAndCalculate(spectateDistance);
+        double maxHeight = parseAndCalculate(spectateHeight);
+        boolean activeSpectateMode = target instanceof Player
+                ? resolveSpectateState(spectateMode)
+                : resolveSpectateState(mobSpectateMode);
+        CameraShot shot = createCameraShot(activePerspective, maxDist, maxHeight);
+        EntityTarget cameraTarget = new EntityTarget(target);
 
-            boolean pov = activeSpectateMode && activePerspective == SpectatePerspective.POV;
-            Runnable onTargetSet = () -> {
-                if (activeSpectateMode) {
-                    if (pov) {
-                        startPovFollow(cameraman, target);
-                        sendInfoMessage(cameraman, messages.get("now-spectating-pov", target.getName()));
-                    } else {
-                        cameraman.setSpectatorTarget(null);
-                        startSpectateTask(cameraman, cameraTarget, shot, activePerspective);
-                        sendInfoMessage(cameraman,
-                                messages.get("now-spectating-perspective", target.getName(), activePerspective));
-                    }
-                } else {
-                    sendInfoMessage(cameraman, messages.get("arrived-at", target.getName()));
-                    if (autoScenic) {
-                        startScenicTask(target.getLocation(), autoScenicPerspective);
-                    }
-                }
-
-                if (mobNightVision && target instanceof org.bukkit.entity.LivingEntity && !(target instanceof Player)) {
-                    startLightCheckTask(cameraman, (org.bukkit.entity.LivingEntity) target);
-                }
-            };
-
-            boolean canInterpolate = teleportSmooth
-                    && cameraman.getWorld().equals(target.getWorld())
-                    && !pov;
-            if (canInterpolate) {
-                sendInfoMessage(cameraman, messages.get("moving-to", target.getName()));
-                double distanceToTarget = cameraman.getLocation().distance(target.getLocation());
-                double calculatedDuration = distanceToTarget / Math.max(1.0, teleportSmoothSpeed);
-                long finalDuration = (long) Math.max(teleportSmoothDuration, calculatedDuration);
-                stopSpectateTask();
-                currentTeleportTask = new SmoothTeleportTask(cameraman, cameraTarget, finalDuration * 20L,
-                        onTargetSet, shot, cameraEasing, this::isCameraPaused);
-                currentTeleportTask.runTaskTimer(plugin, 0L, 1L);
-                return;
-            }
-
+        boolean pov = activeSpectateMode && activePerspective == SpectatePerspective.POV;
+        Runnable onTargetSet = () -> {
             if (activeSpectateMode) {
-                // Always move the camera to the new target first: attaching/watching from the previous
-                // position used to leave the camera frozen in place when the target was far away.
-                cameraman.setSpectatorTarget(null);
-                if (!pov) {
-                    cameraman.teleport(shot.getNextLocation(cameraman, cameraTarget, 0));
+                if (pov) {
+                    startPovFollow(cameraman, target);
+                    sendInfoMessage(cameraman, messages.get("now-spectating-pov", target.getName()));
+                } else {
+                    cameraman.setSpectatorTarget(null);
+                    startSpectateTask(cameraman, cameraTarget, shot, activePerspective);
+                    sendInfoMessage(cameraman,
+                            messages.get("now-spectating-perspective", target.getName(), activePerspective));
                 }
-                onTargetSet.run();
             } else {
-                Location targetLoc = shot.getNextLocation(cameraman, cameraTarget, 0);
-                cameraman.teleport(targetLoc);
-                sendInfoMessage(cameraman, messages.get("moved-to", target.getName()));
+                sendInfoMessage(cameraman, messages.get("arrived-at", target.getName()));
                 if (autoScenic) {
                     startScenicTask(target.getLocation(), autoScenicPerspective);
                 }
-                if (mobNightVision && target instanceof org.bukkit.entity.LivingEntity && !(target instanceof Player)) {
-                    startLightCheckTask(cameraman, (org.bukkit.entity.LivingEntity) target);
-                }
+            }
+
+            if (mobNightVision && target instanceof org.bukkit.entity.LivingEntity && !(target instanceof Player)) {
+                startLightCheckTask(cameraman, (org.bukkit.entity.LivingEntity) target);
+            }
+        };
+
+        boolean canInterpolate = teleportSmooth
+                && cameraman.getWorld().equals(target.getWorld())
+                && !pov;
+        if (canInterpolate) {
+            sendInfoMessage(cameraman, messages.get("moving-to", target.getName()));
+            double distanceToTarget = cameraman.getLocation().distance(target.getLocation());
+            double calculatedDuration = distanceToTarget / Math.max(1.0, teleportSmoothSpeed);
+            long finalDuration = (long) Math.max(teleportSmoothDuration, calculatedDuration);
+            stopSpectateTask();
+            currentTeleportTask = new SmoothTeleportTask(cameraman, cameraTarget, finalDuration * 20L,
+                    onTargetSet, shot, cameraEasing, this::isCameraPaused);
+            currentTeleportTask.runTaskTimer(plugin, 0L, 1L);
+            return true;
+        }
+
+        if (activeSpectateMode) {
+            // Always move the camera to the new target first: attaching/watching from the previous
+            // position used to leave the camera frozen in place when the target was far away.
+            cameraman.setSpectatorTarget(null);
+            if (!pov) {
+                cameraman.teleport(shot.getNextLocation(cameraman, cameraTarget, 0));
+            }
+            onTargetSet.run();
+        } else {
+            Location targetLoc = shot.getNextLocation(cameraman, cameraTarget, 0);
+            cameraman.teleport(targetLoc);
+            sendInfoMessage(cameraman, messages.get("moved-to", target.getName()));
+            if (autoScenic) {
+                startScenicTask(target.getLocation(), autoScenicPerspective);
+            }
+            if (mobNightVision && target instanceof org.bukkit.entity.LivingEntity && !(target instanceof Player)) {
+                startLightCheckTask(cameraman, (org.bukkit.entity.LivingEntity) target);
             }
         }
+        return true;
     }
 
     public void clearTarget() {
@@ -877,9 +888,14 @@ public class CameramanManager {
         currentTargetId = null;
         cameraman.setSpectatorTarget(null);
         currentPathTask = new CameraPathTask(cameraman, points, ticksPerSegment, cameraEasing,
-                this::isCameraPaused);
+                this::isCameraPaused, this::clearFinishedPathTask);
         currentPathTask.runTaskTimer(plugin, 0L, 1L);
         return true;
+    }
+
+    /** Drops the reference once playback finished on its own, so the HUD stops reporting a route. */
+    private void clearFinishedPathTask() {
+        currentPathTask = null;
     }
 
     public boolean stopPathPlayback() {
@@ -901,6 +917,16 @@ public class CameramanManager {
         return cameraPaused;
     }
 
+    /**
+     * Switches to the next eligible target.
+     *
+     * @return {@code true} only when the camera really moved to another target
+     */
+    /** True when at least one target is eligible in the active target mode. */
+    public boolean hasEligibleTargets() {
+        return mobTargetMode ? !getPotentialMobTargets().isEmpty() : !getPotentialTargets().isEmpty();
+    }
+
     public boolean advanceTarget() {
         List<? extends org.bukkit.entity.Entity> targets = mobTargetMode
                 ? getPotentialMobTargets() : getPotentialTargets();
@@ -912,8 +938,10 @@ public class CameramanManager {
                 break;
             }
         }
-        setTarget(targets.get((currentIndex + 1) % targets.size()));
-        return true;
+        // A single eligible target has nothing to advance to; re-selecting it would restart the
+        // camera chain and teleport the operator for no reason.
+        if (targets.size() == 1 && currentIndex >= 0) return false;
+        return setTarget(targets.get((currentIndex + 1) % targets.size()));
     }
 
     public boolean isNewcomerMode() {
@@ -1109,7 +1137,9 @@ public class CameramanManager {
 
     public void refreshPlayerTarget(Player player) {
         if (player != null && player.getUniqueId().equals(currentTargetId) && isTargetAllowed(player)) {
-            setTarget(player);
+            // The POV watchdog keeps the attachment alive, so re-attaching here would teleport the
+            // camera again on every world change; only non-POV views need to be restarted.
+            if (!isFollowingTarget(currentTargetId)) setTarget(player);
         } else if (player != null && player.getUniqueId().equals(currentTargetId)) {
             handleTargetUnavailable(player.getUniqueId());
         }
@@ -1382,6 +1412,7 @@ public class CameramanManager {
         if (currentSpectateTask != null && !currentSpectateTask.isCancelled()) {
             currentSpectateTask.cancel();
         }
+        currentSpectateTask = null;
         if (currentTeleportTask != null && !currentTeleportTask.isCancelled()) {
             currentTeleportTask.cancel();
             currentTeleportTask = null;

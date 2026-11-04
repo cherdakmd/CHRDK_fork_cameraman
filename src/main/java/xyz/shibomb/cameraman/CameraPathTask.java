@@ -16,28 +16,35 @@ public final class CameraPathTask extends BukkitRunnable {
     private final long ticksPerSegment;
     private final String easing;
     private final BooleanSupplier paused;
+    private final Runnable onFinish;
     private Location segmentStart;
     private int waypointIndex;
     private long segmentTick;
 
     public CameraPathTask(Player camera, List<Location> waypoints, long ticksPerSegment, String easing,
             BooleanSupplier paused) {
+        this(camera, waypoints, ticksPerSegment, easing, paused, null);
+    }
+
+    public CameraPathTask(Player camera, List<Location> waypoints, long ticksPerSegment, String easing,
+            BooleanSupplier paused, Runnable onFinish) {
         this.camera = camera;
         this.waypoints = waypoints.stream().map(Location::clone).toList();
         this.ticksPerSegment = Math.max(1L, ticksPerSegment);
         this.easing = easing;
         this.paused = paused;
+        this.onFinish = onFinish;
         this.segmentStart = camera.getLocation().clone();
     }
 
     @Override
     public void run() {
         if (!camera.isOnline()) {
-            cancel();
+            finish();
             return;
         }
         if (waypointIndex >= waypoints.size()) {
-            cancel();
+            finish();
             return;
         }
         if (paused != null && paused.getAsBoolean()) return;
@@ -62,5 +69,11 @@ public final class CameraPathTask extends BukkitRunnable {
             waypointIndex++;
             segmentTick = 0L;
         }
+    }
+
+    /** Cancels the task and notifies the owner once, so stale references can be dropped. */
+    private void finish() {
+        cancel();
+        if (onFinish != null) onFinish.run();
     }
 }

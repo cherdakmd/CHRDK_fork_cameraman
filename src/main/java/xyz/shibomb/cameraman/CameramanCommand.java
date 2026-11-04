@@ -378,7 +378,8 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     String targetName = manager.getCurrentTargetDisplayName();
                     sender.sendMessage(messages.get("target-advanced", targetName == null ? "?" : targetName));
                 } else {
-                    sender.sendMessage(messages.get("menu-no-targets"));
+                    sender.sendMessage(messages.get(manager.hasEligibleTargets()
+                            ? "next-target-single" : "menu-no-targets"));
                 }
                 break;
 
@@ -474,8 +475,11 @@ public class CameramanCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(messages.get("player-not-found"));
                     return true;
                 }
-                manager.setTarget(target);
-                sender.sendMessage(messages.get("target-set", target.getName()));
+                if (manager.setTarget(target)) {
+                    sender.sendMessage(messages.get("target-set", target.getName()));
+                } else {
+                    sender.sendMessage(messages.get("target-set-failed", target.getName()));
+                }
                 break;
 
             case "clear":
