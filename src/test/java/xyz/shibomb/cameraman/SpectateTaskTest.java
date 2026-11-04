@@ -32,8 +32,8 @@ class SpectateTaskTest {
 
         Location result = SpectateTask.ensureCatchUpStep(current, slowFrame, desired, 2.0);
 
-        assertEquals(2.0, current.distance(result), 1.0e-6);
-        assertTrue(current.distance(result) > current.distance(slowFrame));
+        assertEquals(2.0, current.toVector().distance(result.toVector()), 1.0e-6);
+        assertTrue(current.toVector().distance(result.toVector()) > current.toVector().distance(slowFrame.toVector()));
     }
 
     @Test
@@ -55,7 +55,7 @@ class SpectateTaskTest {
 
         Location result = SpectateTask.ensureCatchUpStep(current, frame, desired, 4.0);
 
-        assertTrue(current.distance(result) <= current.distance(desired));
+        assertTrue(current.toVector().distance(result.toVector()) <= current.toVector().distance(desired.toVector()));
         assertEquals(frame.getX(), result.getX(), 1.0e-9);
     }
 }

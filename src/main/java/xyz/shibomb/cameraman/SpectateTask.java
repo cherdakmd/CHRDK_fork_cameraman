@@ -81,7 +81,7 @@ public class SpectateTask extends BukkitRunnable {
      */
     static boolean shouldSnap(Location current, Location desired, boolean first) {
         boolean sameWorld = current.getWorld() != null && current.getWorld() == desired.getWorld();
-        double distance = sameWorld ? current.distance(desired) : Double.POSITIVE_INFINITY;
+        double distance = sameWorld ? current.toVector().distance(desired.toVector()) : Double.POSITIVE_INFINITY;
         if (shouldSnap(distance, sameWorld)) return true;
         if (!first || !sameWorld) return false;
         // A camera that is buried in terrain would otherwise stay pinned by the wall in front of it.
@@ -101,9 +101,9 @@ public class SpectateTask extends BukkitRunnable {
     static Location ensureCatchUpStep(Location current, Location interpolated, Location desired,
             double minStep) {
         if (current.getWorld() != desired.getWorld()) return desired;
-        double remaining = current.distance(desired);
+        double remaining = current.toVector().distance(desired.toVector());
         if (!(minStep > 0.0) || remaining <= minStep) return interpolated;
-        double step = current.distance(interpolated);
+        double step = current.toVector().distance(interpolated.toVector());
         if (step >= Math.min(minStep, remaining)) return interpolated;
         return CameraInterpolation.lerp(current, desired, Math.min(minStep, remaining) / remaining);
     }
